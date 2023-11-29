@@ -12,3 +12,7 @@
 ##main and fct
 main
 fct
+.DS_Store
+
+src/rtaudio-4.1.1
+!duplex.cpp
