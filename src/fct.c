@@ -13,7 +13,7 @@ ringBuffer * createRingBuffer(int n)
     return ptr_ringBuffer;
 }
 
-void addRingBuffer(int data, ringBuffer * ptr_ringBufferData){
+void writeRingBuffer(int data, ringBuffer * ptr_ringBufferData){
     if (ptr_ringBufferData->indexWrite == ptr_ringBufferData->indexRead ){
         ptr_ringBufferData->indexRead++;
         ptr_ringBufferData->indexRead = ptr_ringBufferData->indexRead % ptr_ringBufferData->sizeRingBuffer;
@@ -26,31 +26,29 @@ void addRingBuffer(int data, ringBuffer * ptr_ringBufferData){
     ptr_ringBufferData->list[ptr_ringBufferData->indexWrite] = data;
     ptr_ringBufferData->indexWrite++;
     ptr_ringBufferData->indexWrite = ptr_ringBufferData->indexWrite % ptr_ringBufferData->sizeRingBuffer;
-
- 
 }
 
-void printRingBuffer( ringBuffer ringBufferData){
+void printRingBuffer(ringBuffer ringBufferData){
     int n = ringBufferData.sizeRingBuffer;
 
-    printf("Le ring buffer vaut :\n");
+    printf("Ring Buffer is :\n");
     for(int i=0; i <n; i++){
         printf("%i\n",ringBufferData.list[i]);
     }
 
-    printf("indexRead vaut: %i\n",ringBufferData.indexRead);
-    printf("indexWrite vaut: %i\n",ringBufferData.indexWrite);
+    printf("indexRead is: %i\n",ringBufferData.indexRead);
+    printf("indexWrite is: %i\n",ringBufferData.indexWrite);
 
 }
 
-int getRingBuffer(ringBuffer * ptr_ringBufferData){
+int readRingBuffer(ringBuffer * ptr_ringBufferData){
 
     if (ptr_ringBufferData->indexRead == -1){
         return -1;
     }
 
-    int get = ptr_ringBufferData->list[ptr_ringBufferData->indexRead];
+    int value = ptr_ringBufferData->list[ptr_ringBufferData->indexRead];
     ptr_ringBufferData->indexRead++;
     ptr_ringBufferData->indexRead = ptr_ringBufferData->indexRead % ptr_ringBufferData->sizeRingBuffer;
-    return get;
+    return value;
 }

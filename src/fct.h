@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-// Stucture
+// Types
 typedef int * listRingBuffer;
 
 typedef struct {
@@ -11,8 +11,8 @@ typedef struct {
     int sizeRingBuffer;
 }ringBuffer ;
 
-// Les fonctions
+// Functions
 void printRingBuffer( ringBuffer ringBufferData);
-void addRingBuffer(int data, ringBuffer * ptr_ringBufferData);
-int getRingBuffer(ringBuffer * ptr_ringBufferData);
+void writeRingBuffer(int data, ringBuffer * ptr_ringBufferData);
+int readRingBuffer(ringBuffer * ptr_ringBufferData);
 ringBuffer * createRingBuffer(int n);
