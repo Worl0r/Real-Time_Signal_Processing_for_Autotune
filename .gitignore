@@ -13,6 +13,6 @@
 main
 fct
 .DS_Store
+*.log
 
-src/rtaudio-4.1.1
-!duplex.cpp
+

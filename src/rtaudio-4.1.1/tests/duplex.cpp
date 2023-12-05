@@ -85,7 +85,6 @@ int write_buff_dump(double* buff, const int n_buff, double* buff_dump, const int
 int inout( void *outputBuffer, void *inputBuffer, unsigned int /*nBufferFrames*/,
            double /*streamTime*/, RtAudioStreamStatus status, void *data )
 {
-  cout << "inout";
   // Since the number of input and output channels is equal, we can do
   // a simple buffer copy operation here.
   if ( status ) std::cout << "Stream over/underflow detected." << std::endl;
@@ -93,7 +92,7 @@ int inout( void *outputBuffer, void *inputBuffer, unsigned int /*nBufferFrames*/
   //unsigned int *bytes = (unsigned int *) data;
   BufferOptions *bufferOptions = (BufferOptions *) data;
 
-  memcpy( outputBuffer, inputBuffer, (size_t) &(bufferOptions->bytes));
+  memcpy( outputBuffer, inputBuffer, (size_t) (bufferOptions->bytes));
 
   int index = write_buff_dump(
     (double *) outputBuffer,
@@ -153,19 +152,28 @@ int main( int argc, char *argv[] )
 
   bufferBytes = bufferFrames * channels * sizeof( MY_TYPE );
 
-  /////////////////////////////////////////////// TODO ///////////////////////////////////////////////
+  /////////////////////////////////////////////// Buffer_dump ///////////////////////////////////////////////
   // Initialization of buffer_dump
-  cout << "Settings:\n";
+
   BufferOptions * bufferOptions = (BufferOptions *) malloc(sizeof(BufferOptions));
+  if (bufferOptions == NULL) {
+    fprintf(stderr, "Memory allocation error for BufferOptions\n");
+    exit(1);
+  }
+
   bufferOptions->bufferSize = 100000;
   bufferOptions->bufferDump = (MY_TYPE*) calloc(bufferOptions->bufferSize, sizeof(MY_TYPE));
+  if (bufferOptions->bufferDump == NULL) {
+    fprintf(stderr, "Memory allocation error for bufferDump\n");
+    exit(1);
+  }
+
   bufferOptions->indexBufferDump = 0;
   bufferOptions->bytes = bufferBytes;
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////
 
   try {
-    cout << "Process starting\n";
     adac.openStream( &oParams, &iParams, FORMAT, fs, &bufferFrames, &inout, (void *)bufferOptions, &options );
   }
   catch ( RtAudioError& e ) {
@@ -177,7 +185,6 @@ int main( int argc, char *argv[] )
   std::cout << "\nStream latency = " << adac.getStreamLatency() << " frames" << std::endl;
 
   try {
-    cout << "Start of startStream\n";
     adac.startStream();
 
     char input;
@@ -191,8 +198,6 @@ int main( int argc, char *argv[] )
     std::cout << '\n' << e.getMessage() << '\n' << std::endl;
     goto cleanup;
   }
-
-  cout << "end";
 
  cleanup:
   if ( adac.isStreamOpen() ) adac.closeStream();
