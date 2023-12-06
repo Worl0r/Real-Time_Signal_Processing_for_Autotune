@@ -39,4 +39,8 @@ typedef struct {
 
 } BufferOptions;
 
+typedef struct {
+  BufferOptions *buffer;
+} Buffers;
+
 #endif

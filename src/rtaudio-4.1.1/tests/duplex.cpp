@@ -144,16 +144,29 @@ int inout( void *outputBuffer, void *inputBuffer, unsigned int /*nBufferFrames*/
   if ( status ) std::cout << "Stream over/underflow detected." << std::endl;
 
   //unsigned int *bytes = (unsigned int *) data;
-  BufferOptions *bufferOptions = (BufferOptions *) data;
+  Buffers *listBuffers = (Buffers *) data;
+  BufferOptions * bufferStructIn = listBuffers[0].buffer;
+  BufferOptions * bufferStructOut = listBuffers[1].buffer;
 
-  memcpy( outputBuffer, inputBuffer, (size_t) (bufferOptions->bytes));
+  memcpy( outputBuffer, inputBuffer, (size_t) (bufferStructIn->bytes));
 
+
+  // Record input buffer
   int index = write_buff_dump(
     (double *) inputBuffer,
-    bufferOptions->bufferFrameSize,
-    (MY_TYPE *) bufferOptions->bufferDump,
-    bufferOptions->bufferDumpSize,
-    &bufferOptions->indexBufferDump
+    bufferStructIn->bufferFrameSize,
+    (MY_TYPE *) bufferStructIn->bufferDump,
+    bufferStructIn->bufferDumpSize,
+    &bufferStructIn->indexBufferDump
+  );
+
+  // Record output buffer
+  int index2 = write_buff_dump(
+    (double *) inputBuffer,
+    bufferStructOut->bufferFrameSize,
+    (MY_TYPE *) bufferStructOut->bufferDump,
+    bufferStructOut->bufferDumpSize,
+    &bufferStructOut->indexBufferDump
   );
 
   return 0;
@@ -161,7 +174,6 @@ int inout( void *outputBuffer, void *inputBuffer, unsigned int /*nBufferFrames*/
 
 int main( int argc, char *argv[] )
 {
-  cout << "[INFO] Start of Recording" << endl;
 
   unsigned int channels, fs, bufferBytes, oDevice = 0, iDevice = 0, iOffset = 0, oOffset = 0;
 
@@ -211,14 +223,17 @@ int main( int argc, char *argv[] )
   /////////////////////////////////////////////// Buffers ////////////////////////////////////////////
   // Initialization of buffer_dump
 
+  Buffers * listBuffers = (Buffers *) malloc(sizeof(listBuffers) * 2);
   BufferOptions * bufferIn = allocateBuffer(bufferSize, bufferFrames,  bufferBytes, "SignalIn");
   BufferOptions * bufferOut = allocateBuffer(bufferSize, bufferFrames , bufferBytes, "SignalOut");
+  listBuffers[0].buffer = bufferIn;
+  listBuffers[1].buffer = bufferOut;
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////
-  cout << "[INFO] Start of recording" << endl;
+  cout << "[INFO] Start of Recording" << endl;
 
   try {
-    adac.openStream( &oParams, &iParams, FORMAT, fs, &bufferFrames, &inout, (void *)bufferIn, &options );
+    adac.openStream( &oParams, &iParams, FORMAT, fs, &bufferFrames, &inout, (void *)listBuffers, &options );
   }
   catch ( RtAudioError& e ) {
     std::cout << '\n' << e.getMessage() << '\n' << std::endl;
@@ -249,9 +264,12 @@ int main( int argc, char *argv[] )
 
 /////////////////////////////////////////////// End ///////////////////////////////////////////////
 
+cout << "[INFO] Writting of records" << endl;
 writeBuffer(bufferIn, PATH_RECORD);
+writeBuffer(bufferOut, PATH_RECORD);
 deallocateBuffer(bufferIn);
 deallocateBuffer(bufferOut);
+free(listBuffers);
 
 cout << "[INFO] End" << endl;
 
