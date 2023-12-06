@@ -60,6 +60,13 @@ void usage( void ) {
   exit( 0 );
 }
 
+/////////////////////////////////////////////// Options ///////////////////////////////////////////////
+
+const string PATH_RECORD = "./SICOM_BE_Signal_Temps_Reel/autotune_project/output/";
+const int bufferSize = 10000;
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+
 /////////////////////////////////////////////// Utils ///////////////////////////////////////////////
 
 int write_buff_dump(double* buff, const int n_buff, double* buff_dump, const int n_buff_dump, int* ind_dump) {
@@ -79,6 +86,31 @@ int write_buff_dump(double* buff, const int n_buff, double* buff_dump, const int
 
   return i;
 }
+
+void deallocateBuffer(BufferOptions * bufferOptions){
+  free(bufferOptions->bufferDump);
+  free(bufferOptions);
+}
+
+BufferOptions * allocateBuffer(int bufferSize, unsigned int bufferBytes, int indexBufferDump = 0){
+  BufferOptions * bufferOptions = (BufferOptions *) malloc(sizeof(BufferOptions));
+  if (bufferOptions == NULL) {
+    fprintf(stderr, "Memory allocation error for BufferOptions\n");
+    exit(1);
+  }
+
+  bufferOptions->bufferSize = 100000;
+  bufferOptions->bufferDump = (MY_TYPE*) calloc(bufferOptions->bufferSize, sizeof(MY_TYPE));
+  if (bufferOptions->bufferDump == NULL) {
+    fprintf(stderr, "Memory allocation error for bufferDump\n");
+    exit(1);
+  }
+
+  bufferOptions->indexBufferDump = 0;
+  bufferOptions->bytes = bufferBytes;
+
+  return bufferOptions;
+};
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -152,29 +184,16 @@ int main( int argc, char *argv[] )
 
   bufferBytes = bufferFrames * channels * sizeof( MY_TYPE );
 
-  /////////////////////////////////////////////// Buffer_dump ///////////////////////////////////////////////
+  /////////////////////////////////////////////// Buffers ////////////////////////////////////////////
   // Initialization of buffer_dump
 
-  BufferOptions * bufferOptions = (BufferOptions *) malloc(sizeof(BufferOptions));
-  if (bufferOptions == NULL) {
-    fprintf(stderr, "Memory allocation error for BufferOptions\n");
-    exit(1);
-  }
-
-  bufferOptions->bufferSize = 100000;
-  bufferOptions->bufferDump = (MY_TYPE*) calloc(bufferOptions->bufferSize, sizeof(MY_TYPE));
-  if (bufferOptions->bufferDump == NULL) {
-    fprintf(stderr, "Memory allocation error for bufferDump\n");
-    exit(1);
-  }
-
-  bufferOptions->indexBufferDump = 0;
-  bufferOptions->bytes = bufferBytes;
+  BufferOptions * bufferIn = allocateBuffer(bufferSize, bufferBytes);
+  BufferOptions * bufferOut = allocateBuffer(bufferSize, bufferBytes);
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////
 
   try {
-    adac.openStream( &oParams, &iParams, FORMAT, fs, &bufferFrames, &inout, (void *)bufferOptions, &options );
+    adac.openStream( &oParams, &iParams, FORMAT, fs, &bufferFrames, &inout, (void *)bufferIn, &options );
   }
   catch ( RtAudioError& e ) {
     std::cout << '\n' << e.getMessage() << '\n' << std::endl;
@@ -202,12 +221,14 @@ int main( int argc, char *argv[] )
  cleanup:
   if ( adac.isStreamOpen() ) adac.closeStream();
 
-  for(int i=0; i<bufferOptions->bufferSize; i++)
-    {
-    cout << "Buffer dump is:";
-    cout << bufferOptions->bufferDump[i];
-    cout << "Fin";
-    }
+
+/////////////////////////////////////////////// End ///////////////////////////////////////////////
+
+deallocateBuffer(bufferIn);
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
   return 0;
 }
+
+
