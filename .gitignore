@@ -8,11 +8,15 @@
 # Code C/C++
 
 *.o
+*.exe
 
 ##main and fct
 main
 fct
 .DS_Store
 *.log
+duplex
+output/
 
+./src/rtaudio-4.1.1/tests/duplex
 

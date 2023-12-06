@@ -12,6 +12,7 @@
 #include <iostream>
 #include <cstdlib>
 #include <cstring>
+#include <cstdio>
 
 #include "duplex.hpp"
 
@@ -62,8 +63,8 @@ void usage( void ) {
 
 /////////////////////////////////////////////// Options ///////////////////////////////////////////////
 
-const string PATH_RECORD = "./SICOM_BE_Signal_Temps_Reel/autotune_project/output/";
-const int bufferSize = 10000;
+const string PATH_RECORD = "../../../output/";
+const int bufferSize = 100000;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -90,26 +91,46 @@ int write_buff_dump(double* buff, const int n_buff, double* buff_dump, const int
 void deallocateBuffer(BufferOptions * bufferOptions){
   free(bufferOptions->bufferDump);
   free(bufferOptions);
-}
+};
 
-BufferOptions * allocateBuffer(int bufferSize, unsigned int bufferBytes, int indexBufferDump = 0){
+BufferOptions * allocateBuffer(int bufferDumpSize,
+  int bufferFrameSize,
+  unsigned int bufferBytes,
+  string name,
+  int indexBufferDump = 0){
+
   BufferOptions * bufferOptions = (BufferOptions *) malloc(sizeof(BufferOptions));
   if (bufferOptions == NULL) {
     fprintf(stderr, "Memory allocation error for BufferOptions\n");
     exit(1);
   }
 
-  bufferOptions->bufferSize = 100000;
-  bufferOptions->bufferDump = (MY_TYPE*) calloc(bufferOptions->bufferSize, sizeof(MY_TYPE));
+  bufferOptions->bufferDumpSize = bufferDumpSize;
+
+  bufferOptions->bufferDump = (MY_TYPE*) calloc(bufferOptions->bufferDumpSize, sizeof(MY_TYPE));
   if (bufferOptions->bufferDump == NULL) {
     fprintf(stderr, "Memory allocation error for bufferDump\n");
     exit(1);
   }
 
-  bufferOptions->indexBufferDump = 0;
+  bufferOptions->bufferFrameSize = bufferFrameSize;
+  bufferOptions->indexBufferDump = indexBufferDump;
   bufferOptions->bytes = bufferBytes;
+  bufferOptions->name =  name;
 
   return bufferOptions;
+};
+
+void writeBuffer(BufferOptions *bufferIn, string PATH_RECORD){
+
+  cout << "[INFO] Saving of Signals: " << (bufferIn->name).c_str() << endl;
+  FILE* f;
+  f = fopen(strcat((char *) PATH_RECORD.c_str(), (char *) bufferIn->name.c_str()), "wb");
+
+  assert(f);
+
+  fwrite(bufferIn->bufferDump, sizeof(*(bufferIn->bufferDump)), bufferIn->bufferDumpSize, f);
+  fclose(f);
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -127,10 +148,10 @@ int inout( void *outputBuffer, void *inputBuffer, unsigned int /*nBufferFrames*/
   memcpy( outputBuffer, inputBuffer, (size_t) (bufferOptions->bytes));
 
   int index = write_buff_dump(
-    (double *) outputBuffer,
-    bufferOptions->bytes,
+    (double *) inputBuffer,
+    bufferOptions->bufferFrameSize,
     (MY_TYPE *) bufferOptions->bufferDump,
-    bufferOptions->bufferSize,
+    bufferOptions->bufferDumpSize,
     &bufferOptions->indexBufferDump
   );
 
@@ -139,6 +160,8 @@ int inout( void *outputBuffer, void *inputBuffer, unsigned int /*nBufferFrames*/
 
 int main( int argc, char *argv[] )
 {
+  cout << "[INFO] Start of Recording" << endl;
+
   unsigned int channels, fs, bufferBytes, oDevice = 0, iDevice = 0, iOffset = 0, oOffset = 0;
 
   // Minimal command-line checking
@@ -187,10 +210,11 @@ int main( int argc, char *argv[] )
   /////////////////////////////////////////////// Buffers ////////////////////////////////////////////
   // Initialization of buffer_dump
 
-  BufferOptions * bufferIn = allocateBuffer(bufferSize, bufferBytes);
-  BufferOptions * bufferOut = allocateBuffer(bufferSize, bufferBytes);
+  BufferOptions * bufferIn = allocateBuffer(bufferSize, bufferFrames,  bufferBytes, "SignalIn");
+  BufferOptions * bufferOut = allocateBuffer(bufferSize, bufferFrames , bufferBytes, "SignalOut");
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////
+  cout << "[INFO] Start of recording" << endl;
 
   try {
     adac.openStream( &oParams, &iParams, FORMAT, fs, &bufferFrames, &inout, (void *)bufferIn, &options );
@@ -224,7 +248,10 @@ int main( int argc, char *argv[] )
 
 /////////////////////////////////////////////// End ///////////////////////////////////////////////
 
+writeBuffer(bufferIn, PATH_RECORD);
 deallocateBuffer(bufferIn);
+
+cout << "[INFO] End" << endl;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -30,10 +30,12 @@ class BufferDump{
 
 typedef struct {
     MY_TYPE * bufferDump;
-    int bufferSize;
+    int bufferFrameSize;
+    int bufferDumpSize;
     int sampleFrenquency;
     int indexBufferDump;
     unsigned int bytes;
+    std::string name;
 
 } BufferOptions;
 
