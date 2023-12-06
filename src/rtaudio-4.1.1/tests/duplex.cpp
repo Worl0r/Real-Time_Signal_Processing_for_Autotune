@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>
+#include <cassert>
 
 #include "duplex.hpp"
 
@@ -250,6 +251,7 @@ int main( int argc, char *argv[] )
 
 writeBuffer(bufferIn, PATH_RECORD);
 deallocateBuffer(bufferIn);
+deallocateBuffer(bufferOut);
 
 cout << "[INFO] End" << endl;
 
@@ -257,5 +259,3 @@ cout << "[INFO] End" << endl;
 
   return 0;
 }
-
-
