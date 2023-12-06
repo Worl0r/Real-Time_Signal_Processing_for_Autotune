@@ -10,22 +10,16 @@ typedef double MY_TYPE;
 class RingBuffer{
   public:
     RingBuffer(int size);
-    void writeRingBuffer();
-    int readRingBuffer();
+    int writeRingBuffer(int data);
+    void displayRingBuffer();
+    MY_TYPE readRingBuffer();
     ~RingBuffer();
 
-    int * dataRingBuffer;
-
   private:
-
     int sizeRingBuffer;
     int indexRead;
     int indexWrite;
-};
-
-class BufferDump{
-    public:
-        BufferDump();
+    MY_TYPE * buffer;
 };
 
 typedef struct {

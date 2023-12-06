@@ -15,6 +15,7 @@
 #include <cstdio>
 #include <cassert>
 
+#include "utils.hpp"
 #include "duplex.hpp"
 
 /*
@@ -40,14 +41,6 @@ typedef float MY_TYPE;
 
 typedef double MY_TYPE;
 #define FORMAT RTAUDIO_FLOAT64
-
-RingBuffer::RingBuffer(int size): sizeRingBuffer(size), indexRead(-1), indexWrite(0){
-  dataRingBuffer = new int[sizeRingBuffer];
-};
-
-RingBuffer::~RingBuffer(){
-  free(dataRingBuffer);
-};
 
 void usage( void ) {
   // Error function in case of incorrect command-line
@@ -271,9 +264,103 @@ deallocateBuffer(bufferIn);
 deallocateBuffer(bufferOut);
 free(listBuffers);
 
+cout << "[INFO] [TEST] Test of Ring Buffer" << endl;
+RingBuffer ringBuffer = RingBuffer(4);
+ringBuffer.displayRingBuffer();
+ringBuffer.writeRingBuffer((MY_TYPE) 30);
+ringBuffer.displayRingBuffer();
+ringBuffer.writeRingBuffer((MY_TYPE) 40);
+ringBuffer.writeRingBuffer((MY_TYPE) 50);
+ringBuffer.displayRingBuffer();
+
+MY_TYPE value = ringBuffer.readRingBuffer();
+cout << "My value is :" << value << endl;
+ringBuffer.displayRingBuffer();
+ringBuffer.writeRingBuffer((MY_TYPE) 90);
+ringBuffer.displayRingBuffer();
+ringBuffer.writeRingBuffer((MY_TYPE) 100);
+ringBuffer.displayRingBuffer();
+
+cout << "\n" << endl;
+
 cout << "[INFO] End" << endl;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
   return 0;
 }
+
+////////////////////////////////////////////// Ring Buffer /////////////////////////////////////////
+
+// Constructor and Desstructor
+RingBuffer::RingBuffer(int size): sizeRingBuffer(size), indexRead(-1), indexWrite(0){
+  buffer = new MY_TYPE[sizeRingBuffer];
+
+  for (int i = 0; i < sizeRingBuffer; i++){
+    buffer[i] = 0;
+  }
+}
+
+RingBuffer::~RingBuffer(){
+  free(buffer);
+}
+
+//Methods
+int RingBuffer::writeRingBuffer(int data){
+  if (data == NULL){
+
+    cout << "[ERROR] Data is NULL in writeRingBuffer" << endl;
+    return -1;
+  }
+
+  if (indexWrite == indexRead ){
+    indexRead++;
+    indexRead = indexRead % sizeRingBuffer;
+  }
+
+  if (indexRead == -1){
+    indexRead = 0;
+  }
+
+  buffer[indexWrite] = data;
+  indexWrite++;
+  indexWrite = indexWrite % sizeRingBuffer;
+
+  return 0;
+}
+
+MY_TYPE RingBuffer::readRingBuffer(){
+
+    if (indexRead == -1){
+      cout << "[ERROR] There is nothing to read in the ring buffer in readRingBuffer" << endl;
+      return NULL;
+    }
+
+    MY_TYPE data = buffer[indexRead];
+    indexRead++;
+    indexRead = indexRead % sizeRingBuffer;
+    return data;
+}
+
+void RingBuffer::displayRingBuffer(){
+
+  std::time_t result = std::time(nullptr);
+  cout << "[LOG][TEST] You display your ring buffer at " << std::asctime(std::localtime(&result)) << endl;
+  cout << "[ ";
+
+  for(int i=0; i < sizeRingBuffer; i++){
+    if (i == sizeRingBuffer-1){
+      cout << buffer[i];
+    }
+    else{
+      cout << buffer[i] << " | ";
+    }
+  }
+
+  cout << " ]" << endl;
+  cout << "Read index is : " << indexRead << endl;
+  cout << "Write index is : " << indexWrite << endl;
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
