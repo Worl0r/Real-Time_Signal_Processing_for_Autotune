@@ -17,7 +17,6 @@
 #include <math.h>
 #define _USE_MATH_DEFINES
 
-#include "utils.hpp"
 #include "duplex.hpp"
 
 /*
