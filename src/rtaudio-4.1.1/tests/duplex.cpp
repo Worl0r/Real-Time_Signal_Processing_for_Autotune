@@ -14,6 +14,8 @@
 #include <cstring>
 #include <cstdio>
 #include <cassert>
+#include <math.h>
+#define _USE_MATH_DEFINES
 
 #include "utils.hpp"
 #include "duplex.hpp"
@@ -126,6 +128,40 @@ void writeBuffer(BufferOptions *bufferIn, string PATH_RECORD){
   fwrite(bufferIn->bufferDump, sizeof(*(bufferIn->bufferDump)), bufferIn->bufferDumpSize, f);
   fclose(f);
 };
+
+void derivative(MY_TYPE * f, int size, MY_TYPE *derivative){
+  derivative[0] = 0;
+  for (int i = 1; i < size-1; i++){
+    derivative[i] = (f[i + 1] - f[i - 1]) / 2;
+  }
+}
+
+// The goal is to extract the second maximum for the autocor function.
+int extractFundamentalFrequency(MY_TYPE * autocor, int sizeAutocor){
+  assert(autocor);
+
+  // First derivative
+  MY_TYPE * firstDerivative = (MY_TYPE *) malloc(sizeof(MY_TYPE) * (sizeAutocor-1));
+  derivative(autocor, sizeAutocor, firstDerivative);
+
+  // Seconde derivative
+  MY_TYPE * secondDerivative = (MY_TYPE *) malloc(sizeof(MY_TYPE) * (sizeAutocor-2));
+  derivative(firstDerivative, sizeAutocor, secondDerivative);
+
+  // Keep the first maximum because we cannot compute a zero derivative for the first index.
+  for (int i = 1; i < sizeAutocor-2; i++){
+    if ((firstDerivative[i] >= 0 && firstDerivative[i+1] <= 0) ||
+      (firstDerivative[i] <= 0 && firstDerivative[i+1] >= 0)
+    ){
+      if (secondDerivative[i] <= 0){
+        free(firstDerivative);
+        free(secondDerivative);
+        // [IMPORTANT] The index stats to zero.
+        return i;
+      }
+    }
+  }
+}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -280,6 +316,25 @@ ringBuffer.writeRingBuffer((MY_TYPE) 90);
 ringBuffer.displayRingBuffer();
 ringBuffer.writeRingBuffer((MY_TYPE) 100);
 ringBuffer.displayRingBuffer();
+
+cout << "\n" << endl;
+
+cout << "[INFO] [TEST] Test Maximum" << endl;
+
+int length = 100;
+int * tmp = (int *) malloc(sizeof(int) * length);
+MY_TYPE * f = (MY_TYPE *) malloc(sizeof(MY_TYPE) * length);
+float fre = 1.0/5.0;
+
+for (int i=0; i<length; i++){
+  tmp[i] = i;
+}
+for (int i=0; i<length; i++){
+  f[i] = cos(tmp[i] * 2 * M_PI * fre);
+}
+
+int i = extractFundamentalFrequency(f, length);
+cout << "\nThe period is : " << i+1 << " indexs." << endl;
 
 cout << "\n" << endl;
 
