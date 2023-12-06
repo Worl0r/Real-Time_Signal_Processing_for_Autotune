@@ -134,7 +134,7 @@ void writeBuffer(BufferOptions *bufferIn, string PATH_RECORD){
   fclose(f);
 };
 
-MY_TYPE* demi_auto_corr(BufferOptions* BufferIn){
+MY_TYPE* demi_auto_corr(BufferOptions* BufferIn) {
   int n;
   int k;
   MY_TYPE* auto_corr = (MY_TYPE*) calloc(BufferIn->bufferFrameSize ,sizeof(MY_TYPE));
@@ -147,6 +147,13 @@ MY_TYPE* demi_auto_corr(BufferOptions* BufferIn){
   return auto_corr;
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////// process //////////////////////////////////////////////
+
+void process(BufferOptions* BufferIn) {
+  
+}
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
 int inout( void *outputBuffer, void *inputBuffer, unsigned int /*nBufferFrames*/,
