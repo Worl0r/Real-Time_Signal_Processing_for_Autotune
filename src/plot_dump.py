@@ -27,6 +27,7 @@ def plotSignal(name, frequence, color):
 def main():
     plotSignal("SignalIn", 48000, 'b')
     plotSignal("SignalOut", 48000, 'r')
+    plotSignal("FundamentalFrequency", 48000, 'r')
 
     length = 100
     t = np.linspace(0, length, length)

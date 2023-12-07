@@ -65,6 +65,15 @@ const int bufferSize = 100000;
 
 /////////////////////////////////////////////// Utils ///////////////////////////////////////////////
 
+void displayTab(string testName, MY_TYPE * buffer, int size){
+  cout << "[LOG] [TEST] " << testName << endl << "[";
+
+  for (int i = 0; i<size; i++){
+    cout << (double) buffer[i] << " | ";
+  }
+  cout << " ]" << endl;
+}
+
 int write_buff_dump(double* buff, const int n_buff, double* buff_dump, const int n_buff_dump, int* ind_dump) {
 
   int i = 0;
@@ -143,7 +152,7 @@ int extractFundamentalFrequency(MY_TYPE * autocor, int sizeAutocor){
   MY_TYPE * firstDerivative = (MY_TYPE *) malloc(sizeof(MY_TYPE) * (sizeAutocor-1));
   derivative(autocor, sizeAutocor, firstDerivative);
 
-  // Seconde derivative
+  // Second derivative
   MY_TYPE * secondDerivative = (MY_TYPE *) malloc(sizeof(MY_TYPE) * (sizeAutocor-2));
   derivative(firstDerivative, sizeAutocor, secondDerivative);
 
@@ -162,24 +171,45 @@ int extractFundamentalFrequency(MY_TYPE * autocor, int sizeAutocor){
   }
 }
 
-MY_TYPE* demi_auto_corr(BufferOptions* BufferIn) {
+void demi_auto_corr(BufferOptions* BufferIn, MY_TYPE * auto_corr) {
   int n;
   int k;
-  MY_TYPE* auto_corr = (MY_TYPE*) calloc(BufferIn->bufferFrameSize ,sizeof(MY_TYPE));
+
   for (n = 0; n < BufferIn->bufferFrameSize; n++) {
     auto_corr[n] = 0;
     for (k = n; k < BufferIn->bufferFrameSize; k++) {
       auto_corr[n] += (BufferIn->bufferDump)[k] * (BufferIn->bufferDump)[k - n];
     }
   }
-  return auto_corr;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////// process //////////////////////////////////////////////
 
-void process(BufferOptions* BufferIn) {
+void process(BufferOptions* bufferIn, BufferOptions * fundamentalFrequency) {
+
+  MY_TYPE* auto_corr = (MY_TYPE*) calloc(bufferIn->bufferFrameSize ,sizeof(MY_TYPE));
+
+  demi_auto_corr(bufferIn, auto_corr);
+
+  int index = extractFundamentalFrequency(auto_corr, bufferIn->bufferFrameSize);
+
+  free(auto_corr);
+
+  MY_TYPE tab[fundamentalFrequency->bufferFrameSize];
+
+  for (int i=0; i<fundamentalFrequency->bufferFrameSize; i++){
+    tab[i] = (MY_TYPE) index;
+  }
+
+  int _ = write_buff_dump(
+    tab,
+    fundamentalFrequency->bufferFrameSize,
+    fundamentalFrequency->bufferDump,
+    fundamentalFrequency->bufferDumpSize,
+    &fundamentalFrequency->indexBufferDump
+  );
 
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -195,9 +225,9 @@ int inout( void *outputBuffer, void *inputBuffer, unsigned int /*nBufferFrames*/
   Buffers *listBuffers = (Buffers *) data;
   BufferOptions * bufferStructIn = listBuffers[0].buffer;
   BufferOptions * bufferStructOut = listBuffers[1].buffer;
+  BufferOptions * fundamentalFrequency = listBuffers[2].buffer;
 
   memcpy( outputBuffer, inputBuffer, (size_t) (bufferStructIn->bytes));
-
 
   // Record input buffer
   int index = write_buff_dump(
@@ -207,6 +237,14 @@ int inout( void *outputBuffer, void *inputBuffer, unsigned int /*nBufferFrames*/
     bufferStructIn->bufferDumpSize,
     &bufferStructIn->indexBufferDump
   );
+
+
+
+  /////////////////// Process ////////////////////////
+
+  process(bufferStructIn, fundamentalFrequency);
+
+  ////////////////////////////////////////////////////
 
   // Record output buffer
   int index2 = write_buff_dump(
@@ -271,11 +309,13 @@ int main( int argc, char *argv[] )
   /////////////////////////////////////////////// Buffers ////////////////////////////////////////////
   // Initialization of buffer_dump
 
-  Buffers * listBuffers = (Buffers *) malloc(sizeof(listBuffers) * 2);
+  Buffers * listBuffers = (Buffers *) malloc(sizeof(listBuffers) * 3);
   BufferOptions * bufferIn = allocateBuffer(bufferSize, bufferFrames,  bufferBytes, "SignalIn");
   BufferOptions * bufferOut = allocateBuffer(bufferSize, bufferFrames , bufferBytes, "SignalOut");
+  BufferOptions * fundamentalFrequency = allocateBuffer(bufferSize, bufferFrames , bufferBytes, "FundamentalFrequency");
   listBuffers[0].buffer = bufferIn;
   listBuffers[1].buffer = bufferOut;
+  listBuffers[2].buffer = fundamentalFrequency;
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////
   cout << "[INFO] Start of Recording" << endl;
@@ -315,8 +355,12 @@ int main( int argc, char *argv[] )
 cout << "[INFO] Writting of records" << endl;
 writeBuffer(bufferIn, PATH_RECORD);
 writeBuffer(bufferOut, PATH_RECORD);
+writeBuffer(fundamentalFrequency, PATH_RECORD);
+
+// Cleaning of dynamic allocations
 deallocateBuffer(bufferIn);
 deallocateBuffer(bufferOut);
+deallocateBuffer(fundamentalFrequency);
 free(listBuffers);
 
 cout << "[INFO] [TEST] Test of Ring Buffer" << endl;
