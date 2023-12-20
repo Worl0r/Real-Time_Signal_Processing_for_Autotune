@@ -61,6 +61,7 @@ void usage( void ) {
 
 const string PATH_RECORD = "../../../output/";
 const int bufferSize = 100000;
+const int ringBufferSize = 15;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -174,7 +175,8 @@ int extractFundamentalFrequency(MY_TYPE * autocor, int sizeAutocor){
   int * maxList = (int *) malloc(sizeof(int) * (sizeAutocor));
   int count = 0;
 
-  for (int i = 1; i < sizeAutocor - 1; i++){
+  // TODO: adapt this hard coded variable
+  for (int i = 4; i < sizeAutocor - 1; i++){
     if ((autocor[i-1] < autocor[i]) && (autocor[i] > autocor[i+1])){
       maxList[count] = i,
       count++;
@@ -370,12 +372,12 @@ int main( int argc, char *argv[] )
   if ( adac.isStreamOpen() ) adac.closeStream();
 
 
-/////////////////////////////////////////////// End ///////////////////////////////////////////////
+  /////////////////////////////////////////////// End ///////////////////////////////////////////////
 
-cout << "[INFO] Writting of records" << endl;
-writeBuffer(bufferIn, PATH_RECORD);
-writeBuffer(bufferOut, PATH_RECORD);
-writeBuffer(fundamentalFrequency, PATH_RECORD);
+  cout << "[INFO] Writting of records" << endl;
+  writeBuffer(bufferIn, PATH_RECORD);
+  writeBuffer(bufferOut, PATH_RECORD);
+  writeBuffer(fundamentalFrequency, PATH_RECORD);
 
 // Cleaning of dynamic allocations
 deallocateBuffer(bufferIn);
@@ -386,48 +388,48 @@ free(listBuffers->buffer);
 free(listBuffers->auto_corr);
 free(listBuffers);
 
-// Tests
-cout << "[INFO] [TEST] Test of Ring Buffer" << endl;
-RingBuffer ringBuffer = RingBuffer(4);
-ringBuffer.displayRingBuffer();
-ringBuffer.writeRingBuffer((MY_TYPE) 30);
-ringBuffer.displayRingBuffer();
-ringBuffer.writeRingBuffer((MY_TYPE) 40);
-ringBuffer.writeRingBuffer((MY_TYPE) 50);
-ringBuffer.displayRingBuffer();
+  // Tests
+  cout << "[INFO] [TEST] Test of Ring Buffer" << endl;
+  RingBuffer ringBuffer = RingBuffer(4);
+  ringBuffer.displayRingBuffer();
+  ringBuffer.writeRingBuffer((MY_TYPE) 30);
+  ringBuffer.displayRingBuffer();
+  ringBuffer.writeRingBuffer((MY_TYPE) 40);
+  ringBuffer.writeRingBuffer((MY_TYPE) 50);
+  ringBuffer.displayRingBuffer();
 
-MY_TYPE value = ringBuffer.readRingBuffer();
-cout << "My value is :" << value << endl;
-ringBuffer.displayRingBuffer();
-ringBuffer.writeRingBuffer((MY_TYPE) 90);
-ringBuffer.displayRingBuffer();
-ringBuffer.writeRingBuffer((MY_TYPE) 100);
-ringBuffer.displayRingBuffer();
+  MY_TYPE value = ringBuffer.readRingBuffer();
+  cout << "My value is :" << value << endl;
+  ringBuffer.displayRingBuffer();
+  ringBuffer.writeRingBuffer((MY_TYPE) 90);
+  ringBuffer.displayRingBuffer();
+  ringBuffer.writeRingBuffer((MY_TYPE) 100);
+  ringBuffer.displayRingBuffer();
 
-cout << "\n" << endl;
+  cout << "\n" << endl;
 
-cout << "[INFO] [TEST] Test Maximum" << endl;
+  cout << "[INFO] [TEST] Test Maximum" << endl;
 
-int length = 100;
-int * tmp = (int *) malloc(sizeof(int) * length);
-MY_TYPE * f = (MY_TYPE *) malloc(sizeof(MY_TYPE) * length);
-float fre = 1.0/5.0;
+  int length = 100;
+  int * tmp = (int *) malloc(sizeof(int) * length);
+  MY_TYPE * f = (MY_TYPE *) malloc(sizeof(MY_TYPE) * length);
+  float fre = 1.0/5.0;
 
-for (int i=0; i<length; i++){
-  tmp[i] = i;
-}
-for (int i=0; i<length; i++){
-  f[i] = cos(tmp[i] * 2 * M_PI * fre);
-}
+  for (int i=0; i<length; i++){
+    tmp[i] = i;
+  }
+  for (int i=0; i<length; i++){
+    f[i] = cos(tmp[i] * 2 * M_PI * fre);
+  }
 
-int i = extractFundamentalFrequency(f, length);
-cout << "\nThe period is : " << i+1 << " indexs." << endl;
+  int i = extractFundamentalFrequency(f, length);
+  cout << "\nThe period is : " << i+1 << " indexs." << endl;
 
-cout << "\n" << endl;
+  cout << "\n" << endl;
 
-cout << "[INFO] End" << endl;
+  cout << "[INFO] End" << endl;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
 
   return 0;
 }

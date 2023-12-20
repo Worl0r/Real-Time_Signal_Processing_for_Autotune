@@ -17,7 +17,11 @@ def plotSignal(name, frequence, color):
 
     # Plot the signal. --> Adapt the text on the Figure <--
     plt.figure()
-    plt.plot(x, color)
+    if name == "FundamentalFrequency":
+        plt.plot(((1 / x) * frequence).astype(float), color)
+    else:
+        plt.plot(x, color)
+
     plt.xlabel('Sample')
     plt.ylabel(name)
     plt.title('Evolution of ' + name)
@@ -29,12 +33,14 @@ def main():
     plotSignal("SignalOut", 48000, 'r')
     plotSignal("FundamentalFrequency", 48000, 'r')
 
-    length = 100
-    t = np.linspace(0, length, length)
-    y = np.array([math.cos(i*(1.0/30.0)*2*math.pi) for i in t])
-    plt.figure()
-    plt.plot(t, y)
-    plt.show()
+    # length = 100
+    # t = np.linspace(0, length, length)
+    # y = np.array([math.cos(i*(1.0/30.0)*2*math.pi) for i in t])
+    # plt.figure()
+    # plt.plot(t, y)
+    # plt.show()
+
+    print("[END] Finished")
 
 
 if __name__ == '__main__':
