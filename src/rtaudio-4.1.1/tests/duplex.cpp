@@ -149,27 +149,49 @@ void derivative(MY_TYPE * f, int size, MY_TYPE *derivative){
 int extractFundamentalFrequency(MY_TYPE * autocor, int sizeAutocor){
   assert(autocor);
 
-  // First derivative
-  MY_TYPE * firstDerivative = (MY_TYPE *) malloc(sizeof(MY_TYPE) * (sizeAutocor-1));
-  derivative(autocor, sizeAutocor, firstDerivative);
+  // // First derivative
+  // MY_TYPE * firstDerivative = (MY_TYPE *) malloc(sizeof(MY_TYPE) * (sizeAutocor-1));
+  // derivative(autocor, sizeAutocor, firstDerivative);
 
-  // Second derivative
-  MY_TYPE * secondDerivative = (MY_TYPE *) malloc(sizeof(MY_TYPE) * (sizeAutocor-2));
-  derivative(firstDerivative, sizeAutocor, secondDerivative);
+  // // Second derivative
+  // MY_TYPE * secondDerivative = (MY_TYPE *) malloc(sizeof(MY_TYPE) * (sizeAutocor-2));
+  // derivative(firstDerivative, sizeAutocor, secondDerivative);
 
-  // Keep the first maximum because we cannot compute a zero derivative for the first index.
-  for (int i = 1; i < sizeAutocor-2; i++){
-    if ((firstDerivative[i] >= 0 && firstDerivative[i+1] <= 0) ||
-      (firstDerivative[i] <= 0 && firstDerivative[i+1] >= 0)
-    ){
-      if (secondDerivative[i] <= 0){
-        free(firstDerivative);
-        free(secondDerivative);
-        // [IMPORTANT] The index stats to zero.
-        return i;
-      }
+  // // Keep the first maximum because we cannot compute a zero derivative for the first index.
+  // for (int i = 1; i < sizeAutocor-2; i++){
+  //   if ((firstDerivative[i] >= 0 && firstDerivative[i+1] <= 0) ||
+  //     (firstDerivative[i] <= 0 && firstDerivative[i+1] >= 0)
+  //   ){
+  //     if (secondDerivative[i] <= 0){
+  //       free(firstDerivative);
+  //       free(secondDerivative);
+  //       // [IMPORTANT] The index stats to zero.
+  //       return i;
+  //     }
+  //   }
+  // }
+
+  int * maxList = (int *) malloc(sizeof(int) * (sizeAutocor));
+  int count = 0;
+
+  for (int i = 1; i < sizeAutocor - 1; i++){
+    if ((autocor[i-1] < autocor[i]) && (autocor[i] > autocor[i+1])){
+      maxList[count] = i,
+      count++;
     }
   }
+
+  int max = -1;
+
+  for(int i = 0; i< sizeAutocor; i++){
+    if (autocor[maxList[i]] > max){
+      max = maxList[i];
+    }
+  }
+
+  free(maxList);
+
+  return max;
 }
 
 void demi_auto_corr(double * input, int size, MY_TYPE * auto_corr) {
