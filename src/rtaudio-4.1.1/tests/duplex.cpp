@@ -210,15 +210,11 @@ void demi_auto_corr(double * input, int size, MY_TYPE * auto_corr) {
 
 ////////////////////////////////////////////// process //////////////////////////////////////////////
 
-void process(double * input, int size, BufferOptions * fundamentalFrequency) {
-
-  MY_TYPE* auto_corr = (MY_TYPE*) calloc(size ,sizeof(MY_TYPE));
+void process(double * input, int size, BufferOptions * fundamentalFrequency, MY_TYPE* auto_corr) {
 
   demi_auto_corr(input, size, auto_corr);
 
   int index = extractFundamentalFrequency(auto_corr, size);
-
-  free(auto_corr);
 
   MY_TYPE tab[fundamentalFrequency->bufferFrameSize];
 
@@ -246,9 +242,10 @@ int inout( void *outputBuffer, void *inputBuffer, unsigned int /*nBufferFrames*/
 
   // Unsigned int *bytes = (unsigned int *) data;
   Buffers *listBuffers = (Buffers *) data;
-  BufferOptions * bufferStructIn = listBuffers[0].buffer;
-  BufferOptions * bufferStructOut = listBuffers[1].buffer;
-  BufferOptions * fundamentalFrequency = listBuffers[2].buffer;
+  BufferOptions * bufferStructIn = listBuffers->buffer[0];
+  BufferOptions * bufferStructOut = listBuffers->buffer[1];
+  BufferOptions * fundamentalFrequency = listBuffers->buffer[2];
+  MY_TYPE * auto_corr = listBuffers->auto_corr;
 
   memcpy(outputBuffer, inputBuffer, (size_t) (bufferStructIn->bytes));
 
@@ -263,7 +260,7 @@ int inout( void *outputBuffer, void *inputBuffer, unsigned int /*nBufferFrames*/
 
   /////////////////// Process ////////////////////////
 
-  process((double *) inputBuffer, (int) bufferStructIn->bytes, fundamentalFrequency);
+  process((double *) inputBuffer, (int) bufferStructIn->bytes, fundamentalFrequency, auto_corr);
 
   ////////////////////////////////////////////////////
 
@@ -330,13 +327,15 @@ int main( int argc, char *argv[] )
   /////////////////////////////////////////////// Buffers ////////////////////////////////////////////
   // Initialization of buffer_dump
 
-  Buffers * listBuffers = (Buffers *) malloc(sizeof(listBuffers) * 3);
+  Buffers* listBuffers = (Buffers *) malloc(sizeof(listBuffers));
   BufferOptions * bufferIn = allocateBuffer(bufferSize, bufferFrames,  bufferBytes, "SignalIn");
   BufferOptions * bufferOut = allocateBuffer(bufferSize, bufferFrames , bufferBytes, "SignalOut");
   BufferOptions * fundamentalFrequency = allocateBuffer(bufferSize, bufferFrames , bufferBytes, "FundamentalFrequency");
-  listBuffers[0].buffer = bufferIn;
-  listBuffers[1].buffer = bufferOut;
-  listBuffers[2].buffer = fundamentalFrequency;
+  listBuffers->buffer = (BufferOptions**) calloc(3, sizeof(BufferOptions*));
+  listBuffers->auto_corr = (MY_TYPE*) calloc(bufferBytes ,sizeof(MY_TYPE));
+  listBuffers->buffer[0] = bufferIn;
+  listBuffers->buffer[1] = bufferOut;
+  listBuffers->buffer[2] = fundamentalFrequency;
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////
   cout << "[INFO] Start of Recording" << endl;
@@ -382,6 +381,9 @@ writeBuffer(fundamentalFrequency, PATH_RECORD);
 deallocateBuffer(bufferIn);
 deallocateBuffer(bufferOut);
 deallocateBuffer(fundamentalFrequency);
+
+free(listBuffers->buffer);
+free(listBuffers->auto_corr);
 free(listBuffers);
 
 // Tests

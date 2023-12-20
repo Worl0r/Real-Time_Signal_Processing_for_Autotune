@@ -34,7 +34,8 @@ typedef struct {
 } BufferOptions;
 
 typedef struct {
-  BufferOptions *buffer;
+  BufferOptions ** buffer;
+  MY_TYPE * auto_corr;
 } Buffers;
 
 #endif
