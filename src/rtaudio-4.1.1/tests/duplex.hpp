@@ -7,6 +7,18 @@
 typedef double MY_TYPE;
 #define FORMAT RTAUDIO_FLOAT64
 
+// Some useful functions
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MAX(a,b) (((a)>(b))?(a):(b))
+
+// Functions
+
+int fft(double *x, double *y, const int m);
+char *getmem(int leng, unsigned size);
+double *dgetmem(int leng);
+static int checkm(const int m);
+
+// Struct
 class RingBuffer{
   public:
     RingBuffer(int size);
@@ -26,16 +38,22 @@ typedef struct {
     MY_TYPE * bufferDump;
     int bufferFrameSize;
     int bufferDumpSize;
-    int sampleFrenquency;
     int indexBufferDump;
     unsigned int bytes;
     std::string name;
 
 } BufferOptions;
 
-typedef struct {
-  BufferOptions ** buffer;
+typedef struct{
   MY_TYPE * auto_corr;
+  MY_TYPE * Im_auto_corr;
+  MY_TYPE * magnitudes;
+  MY_TYPE * frequencies;
+} ProcessTools;
+
+typedef struct {
+  BufferOptions * buffer;
+  ProcessTools * processTools;
 } Buffers;
 
 #endif

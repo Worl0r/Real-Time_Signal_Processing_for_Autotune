@@ -17,6 +17,9 @@
 #include <math.h>
 #include <ctime>
 #define _USE_MATH_DEFINES
+#include <sys/time.h>
+#include <sys/resource.h>
+#include <math.h>
 
 #include "duplex.hpp"
 
@@ -62,6 +65,9 @@ void usage( void ) {
 const string PATH_RECORD = "../../../output/";
 const int bufferSize = 100000;
 const int ringBufferSize = 15;
+double *_sintbl = 0;
+int maxfftsize = 48000;
+int samplingFrequency = 512;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -149,51 +155,22 @@ void derivative(MY_TYPE * f, int size, MY_TYPE *derivative){
 // The goal is to extract the second maximum for the autocor function.
 int extractFundamentalFrequency(MY_TYPE * autocor, int sizeAutocor){
   assert(autocor);
+  assert(sizeAutocor >= 5);
 
-  // // First derivative
-  // MY_TYPE * firstDerivative = (MY_TYPE *) malloc(sizeof(MY_TYPE) * (sizeAutocor-1));
-  // derivative(autocor, sizeAutocor, firstDerivative);
-
-  // // Second derivative
-  // MY_TYPE * secondDerivative = (MY_TYPE *) malloc(sizeof(MY_TYPE) * (sizeAutocor-2));
-  // derivative(firstDerivative, sizeAutocor, secondDerivative);
-
-  // // Keep the first maximum because we cannot compute a zero derivative for the first index.
-  // for (int i = 1; i < sizeAutocor-2; i++){
-  //   if ((firstDerivative[i] >= 0 && firstDerivative[i+1] <= 0) ||
-  //     (firstDerivative[i] <= 0 && firstDerivative[i+1] >= 0)
-  //   ){
-  //     if (secondDerivative[i] <= 0){
-  //       free(firstDerivative);
-  //       free(secondDerivative);
-  //       // [IMPORTANT] The index stats to zero.
-  //       return i;
-  //     }
-  //   }
-  // }
-
-  int * maxList = (int *) malloc(sizeof(int) * (sizeAutocor));
-  int count = 0;
+  int max=-1;
+  int index=4;
 
   // TODO: adapt this hard coded variable
-  for (int i = 4; i < sizeAutocor - 1; i++){
+  for (int i = 10; i < sizeAutocor - 1; i++){
     if ((autocor[i-1] < autocor[i]) && (autocor[i] > autocor[i+1])){
-      maxList[count] = i,
-      count++;
+      if(autocor[i] > max){
+        max = autocor[i];
+        index = i;
+      }
     }
   }
 
-  int max = -1;
-
-  for(int i = 0; i< sizeAutocor; i++){
-    if (autocor[maxList[i]] > max){
-      max = maxList[i];
-    }
-  }
-
-  free(maxList);
-
-  return max;
+  return index;
 }
 
 void demi_auto_corr(double * input, int size, MY_TYPE * auto_corr) {
@@ -212,26 +189,69 @@ void demi_auto_corr(double * input, int size, MY_TYPE * auto_corr) {
 
 ////////////////////////////////////////////// process //////////////////////////////////////////////
 
-void process(double * input, int size, BufferOptions * fundamentalFrequency, MY_TYPE* auto_corr) {
+MY_TYPE process(double * input, int size) {
+  // MY_TYPE * auto_corr_value = processTools->auto_corr;
+  // MY_TYPE * Im_auto_corr_value = processTools->Im_auto_corr;
+  // MY_TYPE * frequencies_value = processTools->frequencies;
+  // MY_TYPE * magnitudes_value = processTools->magnitudes;
 
-  demi_auto_corr(input, size, auto_corr);
+  MY_TYPE * auto_corr_value = (MY_TYPE *) calloc(size, sizeof(MY_TYPE));
+  MY_TYPE * Im_auto_corr_value = (MY_TYPE *) calloc(size, sizeof(MY_TYPE));
+  MY_TYPE * frequencies_value = (MY_TYPE *) calloc(size, sizeof(MY_TYPE));
+  MY_TYPE * magnitudes_value = (MY_TYPE *) calloc(size, sizeof(MY_TYPE));
 
-  int index = extractFundamentalFrequency(auto_corr, size);
+  // Search fundament frequency
+  demi_auto_corr(input, size, auto_corr_value);
+  displayTab("auto corr", auto_corr_value, size);
 
-  MY_TYPE tab[fundamentalFrequency->bufferFrameSize];
+  int index = extractFundamentalFrequency(auto_corr_value, size);
 
-  for (int i=0; i<fundamentalFrequency->bufferFrameSize; i++){
-    tab[i] = (MY_TYPE) index;
+  if (index == -1){
+    fprintf(stderr, "Fundamental frequency not found\n");
+    exit(1);
   }
 
-  int _ = write_buff_dump(
-    tab,
-    fundamentalFrequency->bufferFrameSize,
-    fundamentalFrequency->bufferDump,
-    fundamentalFrequency->bufferDumpSize,
-    &fundamentalFrequency->indexBufferDump
-  );
+  cout << "index" << index << endl;
 
+  // FFT transformation
+  int success = fft(auto_corr_value, Im_auto_corr_value, size);
+
+  if(success == -1) {
+    fprintf(stderr, "FFT failed\n");
+    exit(1);
+  }
+
+  // Setup fundamental frequency
+  frequencies_value[0] = (MY_TYPE) (1.0/index) * samplingFrequency;
+  magnitudes_value[0] = (MY_TYPE) sqrt((auto_corr_value[index] * auto_corr_value[index]) + (Im_auto_corr_value[index] * Im_auto_corr_value[index]));
+
+  // Magnitude
+  int count=2;
+  int harmIndex = count * index;
+
+  while (harmIndex < size)
+  {
+    magnitudes_value[count-1] = sqrt((auto_corr_value[harmIndex] * auto_corr_value[harmIndex])+ (Im_auto_corr_value[harmIndex] * Im_auto_corr_value[harmIndex]));
+    frequencies_value[count-1] = (1.0/harmIndex) * samplingFrequency;
+    count++;
+    harmIndex = count * index;
+  }
+
+  displayTab("frequences", frequencies_value, size);
+  displayTab("magnitudes", magnitudes_value, size);
+
+  MY_TYPE signal = 0;
+
+  for(int i = 0; i< size; i++){
+    signal = signal + 2 * magnitudes_value[i] * cos(2 * M_PI * frequencies_value[i] * i);
+  }
+
+  free(auto_corr_value);
+  free(Im_auto_corr_value);
+  free(frequencies_value);
+  free(magnitudes_value);
+
+  return signal;
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -242,12 +262,12 @@ int inout( void *outputBuffer, void *inputBuffer, unsigned int /*nBufferFrames*/
   // a simple buffer copy operation here.
   if ( status ) std::cout << "Stream over/underflow detected." << std::endl;
 
-  // Unsigned int *bytes = (unsigned int *) data;
-  Buffers *listBuffers = (Buffers *) data;
-  BufferOptions * bufferStructIn = listBuffers->buffer[0];
-  BufferOptions * bufferStructOut = listBuffers->buffer[1];
-  BufferOptions * fundamentalFrequency = listBuffers->buffer[2];
-  MY_TYPE * auto_corr = listBuffers->auto_corr;
+  Buffers * listBuffers = (Buffers *) data;
+
+  BufferOptions * bufferStructIn = listBuffers[0].buffer;
+  BufferOptions * bufferStructOut = listBuffers[1].buffer;
+
+  // ProcessTools * processTools = listBuffers[0].processTools;
 
   memcpy(outputBuffer, inputBuffer, (size_t) (bufferStructIn->bytes));
 
@@ -260,16 +280,33 @@ int inout( void *outputBuffer, void *inputBuffer, unsigned int /*nBufferFrames*/
     &bufferStructIn->indexBufferDump
   );
 
-  /////////////////// Process ////////////////////////
+  cout << "input" << endl;
+  cout << bufferStructIn->bufferDump[0] << " | " <<  bufferStructIn->bufferDump[1] << " | " <<  bufferStructIn->bufferDump[2]<< endl;
 
-  process((double *) inputBuffer, (int) bufferStructIn->bytes, fundamentalFrequency, auto_corr);
+  /////////////////// Process ////////////////////////
+  MY_TYPE signal = process((double *) inputBuffer, (int) bufferStructIn->bufferFrameSize);
+
+  cout << "signal" << signal << endl;
+
+  MY_TYPE tab[bufferStructIn->bufferFrameSize];
+
+  for (int i=0; i<bufferStructIn->bufferFrameSize; i++){
+    if(signal > 1){
+      tab[i] = 1;
+    }
+    else if(signal < -1){
+      tab[i] = -1;
+    }
+    else
+      tab[i] = signal;
+  }
 
   ////////////////////////////////////////////////////
 
   // Record output buffer
   int index2 = write_buff_dump(
-    (double *) outputBuffer,
-    bufferStructOut->bufferFrameSize,
+    (MY_TYPE *) tab,
+    bufferStructIn->bufferFrameSize,
     (MY_TYPE *) bufferStructOut->bufferDump,
     bufferStructOut->bufferDumpSize,
     &bufferStructOut->indexBufferDump
@@ -328,16 +365,25 @@ int main( int argc, char *argv[] )
 
   /////////////////////////////////////////////// Buffers ////////////////////////////////////////////
   // Initialization of buffer_dump
-
-  Buffers* listBuffers = (Buffers *) malloc(sizeof(listBuffers));
+  Buffers * listBuffers = (Buffers *) malloc(sizeof(listBuffers) * 3);
   BufferOptions * bufferIn = allocateBuffer(bufferSize, bufferFrames,  bufferBytes, "SignalIn");
   BufferOptions * bufferOut = allocateBuffer(bufferSize, bufferFrames , bufferBytes, "SignalOut");
-  BufferOptions * fundamentalFrequency = allocateBuffer(bufferSize, bufferFrames , bufferBytes, "FundamentalFrequency");
-  listBuffers->buffer = (BufferOptions**) calloc(3, sizeof(BufferOptions*));
-  listBuffers->auto_corr = (MY_TYPE*) calloc(bufferBytes ,sizeof(MY_TYPE));
-  listBuffers->buffer[0] = bufferIn;
-  listBuffers->buffer[1] = bufferOut;
-  listBuffers->buffer[2] = fundamentalFrequency;
+  //BufferOptions * fundamentalFrequency = allocateBuffer(bufferSize, bufferFrames , bufferBytes, "FundamentalFrequency");
+
+  listBuffers[0].buffer = bufferIn;
+  listBuffers[1].buffer = bufferOut;
+  //listBuffers[2].buffer = fundamentalFrequency;
+
+  ProcessTools * processTools = (ProcessTools *) malloc(sizeof(ProcessTools));
+
+  processTools->auto_corr = (MY_TYPE *) malloc(sizeof(MY_TYPE) * bufferFrames);
+  processTools->Im_auto_corr = (MY_TYPE *) malloc(sizeof(MY_TYPE) * bufferFrames);
+  processTools->magnitudes = (MY_TYPE *) malloc(sizeof(MY_TYPE) * bufferFrames);
+  processTools->frequencies = (MY_TYPE *) malloc(sizeof(MY_TYPE) * bufferFrames);
+
+  listBuffers[0].processTools = processTools;
+  listBuffers[1].processTools = processTools;
+  //listBuffers[2].processTools = processTools;
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////
   cout << "[INFO] Start of Recording" << endl;
@@ -377,16 +423,19 @@ int main( int argc, char *argv[] )
   cout << "[INFO] Writting of records" << endl;
   writeBuffer(bufferIn, PATH_RECORD);
   writeBuffer(bufferOut, PATH_RECORD);
-  writeBuffer(fundamentalFrequency, PATH_RECORD);
+  //writeBuffer(fundamentalFrequency, PATH_RECORD);
 
-// Cleaning of dynamic allocations
-deallocateBuffer(bufferIn);
-deallocateBuffer(bufferOut);
-deallocateBuffer(fundamentalFrequency);
+  // Cleaning of dynamic allocations
+  deallocateBuffer(bufferIn);
+  deallocateBuffer(bufferOut);
+  //deallocateBuffer(fundamentalFrequency);
 
-free(listBuffers->buffer);
-free(listBuffers->auto_corr);
-free(listBuffers);
+  free(listBuffers);
+  // free(processTools->auto_corr);
+  // free(processTools->Im_auto_corr);
+  // free(processTools->magnitudes);
+  // free(processTools->frequencies);
+  // free(processTools);
 
   // Tests
   cout << "[INFO] [TEST] Test of Ring Buffer" << endl;
@@ -508,3 +557,153 @@ void RingBuffer::displayRingBuffer(){
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/********************************************************
+   $Id$
+       NAME:
+                fft - fast fourier transform
+       SYNOPSIS:
+                int   fft(x, y, m);
+
+                double   x[];   real part
+                double   y[];   imaginary part
+                int      m;     data size
+
+                return : success = 0
+                         fault   = -1
+       Naohiro Isshiki          Dec.1995    modified
+********************************************************/
+
+int fft(double *x, double *y, const int m)
+{
+   int j, lmx, li;
+   double *xp, *yp;
+   double *sinp, *cosp;
+   int lf, lix, tblsize;
+   int mv2, mm1;
+   double t1, t2;
+   double arg;
+   int checkm(const int);
+
+   /**************
+   * RADIX-2 FFT *
+   **************/
+
+   if (checkm(m))
+      return (-1);
+
+   /***********************
+   * SIN table generation *
+   ***********************/
+
+   if ((_sintbl == 0) || (maxfftsize < m)) {
+      tblsize = m - m / 4 + 1;
+      arg = M_PI / m * 2;
+      if (_sintbl != 0)
+         free(_sintbl);
+      _sintbl = sinp = dgetmem(tblsize);
+      *sinp++ = 0;
+      for (j = 1; j < tblsize; j++)
+         *sinp++ = sin(arg * (double) j);
+      _sintbl[m / 2] = 0;
+      maxfftsize = m;
+   }
+
+   lf = maxfftsize / m;
+   lmx = m;
+
+   for (;;) {
+      lix = lmx;
+      lmx /= 2;
+      if (lmx <= 1)
+         break;
+      sinp = _sintbl;
+      cosp = _sintbl + maxfftsize / 4;
+      for (j = 0; j < lmx; j++) {
+         xp = &x[j];
+         yp = &y[j];
+         for (li = lix; li <= m; li += lix) {
+            t1 = *(xp) - *(xp + lmx);
+            t2 = *(yp) - *(yp + lmx);
+            *(xp) += *(xp + lmx);
+            *(yp) += *(yp + lmx);
+            *(xp + lmx) = *cosp * t1 + *sinp * t2;
+            *(yp + lmx) = *cosp * t2 - *sinp * t1;
+            xp += lix;
+            yp += lix;
+         }
+         sinp += lf;
+         cosp += lf;
+      }
+      lf += lf;
+   }
+
+   xp = x;
+   yp = y;
+   for (li = m / 2; li--; xp += 2, yp += 2) {
+      t1 = *(xp) - *(xp + 1);
+      t2 = *(yp) - *(yp + 1);
+      *(xp) += *(xp + 1);
+      *(yp) += *(yp + 1);
+      *(xp + 1) = t1;
+      *(yp + 1) = t2;
+   }
+
+   /***************
+   * bit reversal *
+   ***************/
+   j = 0;
+   xp = x;
+   yp = y;
+   mv2 = m / 2;
+   mm1 = m - 1;
+   for (lmx = 0; lmx < mm1; lmx++) {
+      if ((li = lmx - j) < 0) {
+         t1 = *(xp);
+         t2 = *(yp);
+         *(xp) = *(xp + li);
+         *(yp) = *(yp + li);
+         *(xp + li) = t1;
+         *(yp + li) = t2;
+      }
+      li = mv2;
+      while (li <= j) {
+         j -= li;
+         li /= 2;
+      }
+      j += li;
+      xp = x + j;
+      yp = y + j;
+   }
+
+   return (0);
+}
+
+double *dgetmem(int leng)
+{
+    return ( (double *)getmem(leng, sizeof(double)) );
+}
+
+char *getmem(int leng, unsigned size)
+{
+    char *p = NULL;
+
+    if ((p = (char *)calloc(leng, size)) == NULL){
+        fprintf(stderr, "Memory allocation error !\n");
+        exit(3);
+    }
+    return (p);
+}
+
+static int checkm(const int m)
+{
+   int k;
+
+   for (k = 4; k <= m; k <<= 1) {
+      if (k == m)
+         return (0);
+   }
+   fprintf(stderr, "fft : m must be a integer of power of 2! (m=%i)\n",m);
+
+   return (-1);
+}
