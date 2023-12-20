@@ -15,6 +15,7 @@
 #include <cstdio>
 #include <cassert>
 #include <math.h>
+#include <ctime>
 #define _USE_MATH_DEFINES
 
 #include "duplex.hpp"
@@ -171,14 +172,14 @@ int extractFundamentalFrequency(MY_TYPE * autocor, int sizeAutocor){
   }
 }
 
-void demi_auto_corr(BufferOptions* BufferIn, MY_TYPE * auto_corr) {
+void demi_auto_corr(double * input, int size, MY_TYPE * auto_corr) {
   int n;
   int k;
 
-  for (n = 0; n < BufferIn->bufferFrameSize; n++) {
+  for (n = 0; n < size; n++) {
     auto_corr[n] = 0;
-    for (k = n; k < BufferIn->bufferFrameSize; k++) {
-      auto_corr[n] += (BufferIn->bufferDump)[k] * (BufferIn->bufferDump)[k - n];
+    for (k = n; k < size; k++) {
+      auto_corr[n] += input[k] * input[k - n];
     }
   }
 }
@@ -187,13 +188,13 @@ void demi_auto_corr(BufferOptions* BufferIn, MY_TYPE * auto_corr) {
 
 ////////////////////////////////////////////// process //////////////////////////////////////////////
 
-void process(BufferOptions* bufferIn, BufferOptions * fundamentalFrequency) {
+void process(double * input, int size, BufferOptions * fundamentalFrequency) {
 
-  MY_TYPE* auto_corr = (MY_TYPE*) calloc(bufferIn->bufferFrameSize ,sizeof(MY_TYPE));
+  MY_TYPE* auto_corr = (MY_TYPE*) calloc(size ,sizeof(MY_TYPE));
 
-  demi_auto_corr(bufferIn, auto_corr);
+  demi_auto_corr(input, size, auto_corr);
 
-  int index = extractFundamentalFrequency(auto_corr, bufferIn->bufferFrameSize);
+  int index = extractFundamentalFrequency(auto_corr, size);
 
   free(auto_corr);
 
@@ -221,13 +222,13 @@ int inout( void *outputBuffer, void *inputBuffer, unsigned int /*nBufferFrames*/
   // a simple buffer copy operation here.
   if ( status ) std::cout << "Stream over/underflow detected." << std::endl;
 
-  //unsigned int *bytes = (unsigned int *) data;
+  // Unsigned int *bytes = (unsigned int *) data;
   Buffers *listBuffers = (Buffers *) data;
   BufferOptions * bufferStructIn = listBuffers[0].buffer;
   BufferOptions * bufferStructOut = listBuffers[1].buffer;
   BufferOptions * fundamentalFrequency = listBuffers[2].buffer;
 
-  memcpy( outputBuffer, inputBuffer, (size_t) (bufferStructIn->bytes));
+  memcpy(outputBuffer, inputBuffer, (size_t) (bufferStructIn->bytes));
 
   // Record input buffer
   int index = write_buff_dump(
@@ -238,17 +239,15 @@ int inout( void *outputBuffer, void *inputBuffer, unsigned int /*nBufferFrames*/
     &bufferStructIn->indexBufferDump
   );
 
-
-
   /////////////////// Process ////////////////////////
 
-  process(bufferStructIn, fundamentalFrequency);
+  process((double *) inputBuffer, (int) bufferStructIn->bytes, fundamentalFrequency);
 
   ////////////////////////////////////////////////////
 
   // Record output buffer
   int index2 = write_buff_dump(
-    (double *) inputBuffer,
+    (double *) outputBuffer,
     bufferStructOut->bufferFrameSize,
     (MY_TYPE *) bufferStructOut->bufferDump,
     bufferStructOut->bufferDumpSize,
@@ -363,6 +362,7 @@ deallocateBuffer(bufferOut);
 deallocateBuffer(fundamentalFrequency);
 free(listBuffers);
 
+// Tests
 cout << "[INFO] [TEST] Test of Ring Buffer" << endl;
 RingBuffer ringBuffer = RingBuffer(4);
 ringBuffer.displayRingBuffer();
@@ -423,7 +423,7 @@ RingBuffer::~RingBuffer(){
   free(buffer);
 }
 
-//Methods
+// Methods
 int RingBuffer::writeRingBuffer(int data){
   if (data == NULL){
 
