@@ -19,20 +19,29 @@ double *dgetmem(int leng);
 static int checkm(const int m);
 
 // Struct
-class RingBuffer{
-  public:
-    RingBuffer(int size);
-    int writeRingBuffer(int data);
-    void displayRingBuffer();
-    MY_TYPE readRingBuffer();
-    ~RingBuffer();
+// class RingBuffer{
+//   public:
+//     RingBuffer(int size);
+//     int writeRingBuffer(int data);
+//     void displayRingBuffer();
+//     int getSizeRingBuffer();
+//     int readRingBuffer();
+//     ~RingBuffer();
 
-  private:
-    int sizeRingBuffer;
-    int indexRead;
-    int indexWrite;
-    MY_TYPE * buffer;
-};
+//   private:
+//     int sizeRingBuffer;
+//     int indexRead;
+//     int indexWrite;
+//     int * buffer;
+// };
+
+
+typedef struct {
+  int sizeRingBuffer;
+  int indexRead;
+  int indexWrite;
+  int* buffer;
+} RingBuffer;
 
 typedef struct {
     MY_TYPE * bufferDump;
@@ -46,14 +55,27 @@ typedef struct {
 
 typedef struct{
   MY_TYPE * auto_corr;
-  MY_TYPE * Im_auto_corr;
+  MY_TYPE * im_input;
   MY_TYPE * magnitudes;
   MY_TYPE * frequencies;
+  MY_TYPE * phase;
+  MY_TYPE * oldPhase;
+  MY_TYPE * autotuneSignal;
 } ProcessTools;
 
 typedef struct {
-  BufferOptions * buffer;
+  BufferOptions ** buffer;
   ProcessTools * processTools;
+  RingBuffer * ringBufferFreq;
 } Buffers;
+
+// Functions
+
+RingBuffer * createRingBuffer(int size);
+int writeRingBuffer(RingBuffer * ringBuffer, int data);
+void displayRingBuffer(RingBuffer * ringBuffer);
+int getSizeRingBuffer(RingBuffer * ringBuffer);
+int readRingBuffer(RingBuffer * ringBuffer);
+void destroyRingBuffer(RingBuffer * ringBuffer);
 
 #endif
