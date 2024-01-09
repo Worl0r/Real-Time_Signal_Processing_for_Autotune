@@ -20,6 +20,7 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <math.h>
+#include "somefunc.cpp"
 
 #include "duplex.hpp"
 
@@ -63,13 +64,12 @@ void usage( void ) {
 /////////////////////////////////////////////// Options ///////////////////////////////////////////////
 
 const string PATH_RECORD = "../../../output/";
-const int bufferSize = 100000;
-const int ringBufferSize = 20;
-double *_sintbl = 0;
-int maxfftsize = 512;
-int samplingFrequency = 48000;
-int nbrHarmonics = 5;
-int nbrDemiTons = 2;
+unsigned int bufferFrames = 512;
+const int bufferSize = 500000;
+const int ringBufferSize = 4;
+double samplingFrequency = 48000;
+int nbrHarmonics = 10;
+int nbrDemiTons = 1;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -177,24 +177,6 @@ void displayTab(string testName, MY_TYPE * buffer, int size){
   cout << " ]" << endl;
 }
 
-int write_buff_dump(double* buff, const int n_buff, double* buff_dump, const int n_buff_dump, int* ind_dump) {
-
-  int i = 0;
-  for (i = 0; i < n_buff; i++)
-  {
-    if (*ind_dump < n_buff_dump)
-    {
-      buff_dump[*ind_dump] = buff[i];
-      (*ind_dump)++;
-    } else
-    {
-      break;
-    }
-  }
-
-  return i;
-}
-
 void deallocateBuffer(BufferOptions * bufferOptions){
   free(bufferOptions->bufferDump);
   free(bufferOptions);
@@ -281,27 +263,16 @@ void demi_auto_corr(double * input, int size, MY_TYPE * auto_corr) {
   }
 }
 
-void hzTodemiTon(MY_TYPE * frequencies, int size){
-  for (int i = 0; i < size; i++){
-    frequencies[i] = 12 * log2(frequencies[i]);
-  }
-}
-
-void demiTonToHz(MY_TYPE * frequencies, int size){
-  for (int i = 0; i < size; i++){
-    frequencies[i] = pow(2, frequencies[i]/12);
-  }
-}
-
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////// process //////////////////////////////////////////////
-void changeFundamentalFrequency(MY_TYPE * fundamentalFrequency, int nbrDemiTons, int size){
-  hzTodemiTon(fundamentalFrequency, size);
+MY_TYPE changeFundamentalFrequency(MY_TYPE fundamentalFrequency, int nbrDemiTons, int size){
 
-  //*fundamentalFrequency = round(*fundamentalFrequency / nbrDemiTons) * nbrDemiTons;
+  fundamentalFrequency = 12.0 * log2(fundamentalFrequency);
+  fundamentalFrequency = round(fundamentalFrequency - nbrDemiTons);
+  fundamentalFrequency = pow(2, fundamentalFrequency/12.0);
 
-  demiTonToHz(fundamentalFrequency, size);
+  return fundamentalFrequency;
 }
 
 int saveFundamentalFrequency(RingBuffer * ringBuffer, ProcessTools * processTools, double * input, int size){
@@ -327,8 +298,6 @@ int saveFundamentalFrequency(RingBuffer * ringBuffer, ProcessTools * processTool
 
 void process(double * input, RingBuffer * ringBufferFreq, ProcessTools * processTools, int size) {
 
-  memset(processTools->im_input, 0, size * sizeof(MY_TYPE));
-
   // Compute fundamental frequency
   int val = saveFundamentalFrequency(ringBufferFreq, processTools, input, size);
 
@@ -337,8 +306,13 @@ void process(double * input, RingBuffer * ringBufferFreq, ProcessTools * process
     exit(1);
   }
 
+  MY_TYPE im_input[size];
+  for (int i = 0; i < size; i++){
+    im_input[i] = 0;
+  }
+
   // FFT transformation
-  int success = fft(input, processTools->im_input, size);
+  int success = fftr(input, im_input, size/4);
 
   if(success == -1) {
     fprintf(stderr, "FFT failed\n");
@@ -349,65 +323,81 @@ void process(double * input, RingBuffer * ringBufferFreq, ProcessTools * process
   int meanFreq = meanRingBuffer(ringBufferFreq);
 
   if(meanFreq == 0){
+    cout << "[INFO] Fundamental frequency not found" << endl;
     return;
   }
 
   // Convert meanFreq to Hz
   MY_TYPE meanFreqHz = (MY_TYPE) (1.0 / meanFreq) * samplingFrequency;
 
-  // Display
+  // Display fundamental frequency
   displayRingBuffer(ringBufferFreq);
   cout << "frequencies_value[0] in Hz before T" << meanFreqHz << endl;
   cout << "frequencies_value[0] in idx before T" << meanFreq << endl;
 
   // Transform fundamental frequency
-  changeFundamentalFrequency(&meanFreqHz, nbrDemiTons, nbrHarmonics);
-
-  // Setup fundamental frequency and magnitude
-  processTools->frequencies[0] = meanFreqHz;
-  meanFreq = round((1.0 / meanFreqHz) * samplingFrequency);
-  processTools->magnitudes[0] = (MY_TYPE) sqrt((input[meanFreq] * input[meanFreq]) + (processTools->im_input[meanFreq] * processTools->im_input[meanFreq]));
-  //processTools->phase[0] = atan2(processTools->im_input[meanFreq], input[meanFreq]);
-  processTools->phase[0] = processTools->oldPhase[0] + 2.0 *  M_PI * processTools->frequencies[0];
+  meanFreqHz = changeFundamentalFrequency(meanFreqHz, nbrDemiTons, nbrHarmonics);
 
   cout << "frequencies_value[0] in Hz after T" << meanFreqHz << endl;
   cout << "frequencies_value[0] in idx after T" << meanFreq << endl;
 
+  // Setup fundamental frequency and magnitude
+  processTools->frequencies[0] = meanFreqHz;
+  meanFreq = round((1.0 / meanFreqHz) * samplingFrequency);
+  processTools->magnitudes[0] = (MY_TYPE) sqrt((input[meanFreq] * input[meanFreq]) + (im_input[meanFreq] * im_input[meanFreq]));
+  processTools->magnitudes[0] = processTools->magnitudes[0] / 2.0;
+
+  processTools->phase[0] = fmod(processTools->oldPhase[0] + 2.0 *  M_PI * processTools->frequencies[0] * ((double) size / samplingFrequency), 2.0 * M_PI);
+
   // Idem for other harmonics
-  for (int j = 2; j < nbrHarmonics; j++){
-    processTools->frequencies[j-1] = j * meanFreqHz;
-    processTools->magnitudes[j-1] = sqrt((input[j * meanFreq] * input[j * meanFreq]) + (processTools->im_input[j * meanFreq] * processTools->im_input[j * meanFreq]));
-    processTools->phase[j-1] = processTools->oldPhase[j-1] + 2.0 *  M_PI * processTools->frequencies[j-1];
-    //processTools->phase[j-1] = atan2(processTools->im_input[j * meanFreq], input[j * meanFreq]);
+  for (int j = 2; (j <= nbrHarmonics); j++){
+    if (j * meanFreq >= size){
+      break;
+    }
+    else{
+       processTools->frequencies[j-1] = j * meanFreqHz;
+      processTools->magnitudes[j-1] = sqrt((input[j * meanFreq] * input[j * meanFreq]) + (im_input[j * meanFreq] * im_input[j * meanFreq]));
+      processTools->magnitudes[j-1] = processTools->magnitudes[j-1] / 2.0;
+
+      processTools->phase[j-1] = fmod(processTools->oldPhase[j-1] + 2.0 *  M_PI * processTools->frequencies[j-1] * ((double) size / samplingFrequency), 2.0 * M_PI);
+    }
   }
 
+  // Clear signal
+  for (int i = 0; i < size; i++){
+    im_input[i] = 0;
+    input[i] = 0;
+  }
+
+  // Display
   displayTab("Magnitudes", processTools->magnitudes, nbrHarmonics);
   displayTab("Frequencies", processTools->frequencies, nbrHarmonics);
   displayTab("oldPhase", processTools->oldPhase, nbrHarmonics);
   displayTab("Phase", processTools->phase, nbrHarmonics);
 
-  // Update old phase
+  // Update old phase and old frequencies
   memcpy(processTools->oldPhase, processTools->phase, nbrHarmonics * sizeof(MY_TYPE));
+  memcpy(processTools->oldFrequencies, processTools->frequencies, nbrHarmonics * sizeof(MY_TYPE));
 
   for(int i = 0; i< size; i++){
-    MY_TYPE sum = 0;
+    MY_TYPE sum = 0.0;
 
     for(int j = 0; j < nbrHarmonics; j++){
-      sum = sum + 2 * processTools->magnitudes[j] * cos(2.0 * M_PI * processTools->frequencies[j] * i + processTools->phase[j]);
+      sum = sum + 2.0 * processTools->magnitudes[j] * cos(2.0 * M_PI * (double) (i+1) * processTools->frequencies[j] / samplingFrequency + processTools->phase[j]);
     }
 
     if(sum > 1){
-      processTools->autotuneSignal[i] = 0;
+      processTools->autotuneSignal[i] = 1;
     }
     else if(sum < -1){
-      processTools->autotuneSignal[i] = 0;
+      processTools->autotuneSignal[i] = -1;
     }
     else{
       processTools->autotuneSignal[i] = sum;
     }
   }
 
-  displayTab("SignalTab", (processTools->autotuneSignal), size);
+  //displayTab("SignalTab", (processTools->autotuneSignal), size);
 
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -419,6 +409,7 @@ int inout( void *outputBuffer, void *inputBuffer, unsigned int /*nBufferFrames*/
   // a simple buffer copy operation here.
   if ( status ) std::cout << "Stream over/underflow detected." << std::endl;
 
+  // Variables
   Buffers * listBuffers = (Buffers *) data;
 
   BufferOptions * bufferStructIn = listBuffers->buffer[0];
@@ -429,8 +420,6 @@ int inout( void *outputBuffer, void *inputBuffer, unsigned int /*nBufferFrames*/
   RingBuffer * ringBufferFreq = listBuffers->ringBufferFreq;
 
   ProcessTools * processTools = listBuffers->processTools;
-
-  memcpy(outputBuffer, inputBuffer, (size_t) (bufferStructIn->bytes));
 
   // Record input buffer
   int index = write_buff_dump(
@@ -446,6 +435,8 @@ int inout( void *outputBuffer, void *inputBuffer, unsigned int /*nBufferFrames*/
   process((double *) inputBuffer, ringBufferFreq, processTools, (int) bufferStructIn->bufferFrameSize);
 
   ////////////////////////////////////////////////////
+
+  memcpy(outputBuffer, (void *) processTools->autotuneSignal, (size_t) (bufferStructIn->bytes));
 
   // Record output buffer
   int index2 = write_buff_dump(
@@ -488,7 +479,6 @@ int main( int argc, char *argv[] )
   adac.showWarnings( true );
 
   // Set the same number of channels for both input and output.
-  unsigned int bufferFrames = 512;
   RtAudio::StreamParameters iParams, oParams;
   iParams.deviceId = iDevice;
   iParams.nChannels = channels;
@@ -522,8 +512,8 @@ int main( int argc, char *argv[] )
   ProcessTools * processTools = (ProcessTools *) malloc(sizeof(ProcessTools));
 
   processTools->auto_corr = (MY_TYPE *) calloc(bufferFrames, sizeof(MY_TYPE));
-  processTools->im_input = (MY_TYPE *) calloc(bufferFrames, sizeof(MY_TYPE));
   processTools->frequencies = (MY_TYPE *) calloc(nbrHarmonics, sizeof(MY_TYPE));
+  processTools->oldFrequencies = (MY_TYPE *) calloc(nbrHarmonics, sizeof(MY_TYPE));
   processTools->magnitudes = (MY_TYPE *) calloc(nbrHarmonics, sizeof(MY_TYPE));
   processTools->phase = (MY_TYPE *) calloc(nbrHarmonics, sizeof(MY_TYPE));
   processTools->autotuneSignal = (MY_TYPE *) calloc(bufferFrames, sizeof(MY_TYPE));
@@ -583,8 +573,12 @@ int main( int argc, char *argv[] )
   deallocateBuffer(listBuffers->buffer[3]);
 
   free(processTools->auto_corr);
-  free(processTools->im_input);
   free(processTools->autotuneSignal);
+  free(processTools->frequencies);
+  free(processTools->oldFrequencies);
+  free(processTools->magnitudes);
+  free(processTools->phase);
+  free(processTools->oldPhase);
   free(processTools);
 
   destroyRingBuffer(listBuffers->ringBufferFreq);
@@ -598,152 +592,3 @@ int main( int argc, char *argv[] )
   return 0;
 }
 
-/********************************************************
-   $Id$
-       NAME:
-                fft - fast fourier transform
-       SYNOPSIS:
-                int   fft(x, y, m);
-
-                double   x[];   real part
-                double   y[];   imaginary part
-                int      m;     data size
-
-                return : success = 0
-                         fault   = -1
-       Naohiro Isshiki          Dec.1995    modified
-********************************************************/
-
-int fft(double *x, double *y, const int m)
-{
-   int j, lmx, li;
-   double *xp, *yp;
-   double *sinp, *cosp;
-   int lf, lix, tblsize;
-   int mv2, mm1;
-   double t1, t2;
-   double arg;
-   int checkm(const int);
-
-   /**************
-   * RADIX-2 FFT *
-   **************/
-
-   if (checkm(m))
-      return (-1);
-
-   /***********************
-   * SIN table generation *
-   ***********************/
-
-   if ((_sintbl == 0) || (maxfftsize < m)) {
-      tblsize = m - m / 4 + 1;
-      arg = M_PI / m * 2;
-      if (_sintbl != 0)
-         free(_sintbl);
-      _sintbl = sinp = dgetmem(tblsize);
-      *sinp++ = 0;
-      for (j = 1; j < tblsize; j++)
-         *sinp++ = sin(arg * (double) j);
-      _sintbl[m / 2] = 0;
-      maxfftsize = m;
-   }
-
-   lf = maxfftsize / m;
-   lmx = m;
-
-   for (;;) {
-      lix = lmx;
-      lmx /= 2;
-      if (lmx <= 1)
-         break;
-      sinp = _sintbl;
-      cosp = _sintbl + maxfftsize / 4;
-      for (j = 0; j < lmx; j++) {
-         xp = &x[j];
-         yp = &y[j];
-         for (li = lix; li <= m; li += lix) {
-            t1 = *(xp) - *(xp + lmx);
-            t2 = *(yp) - *(yp + lmx);
-            *(xp) += *(xp + lmx);
-            *(yp) += *(yp + lmx);
-            *(xp + lmx) = *cosp * t1 + *sinp * t2;
-            *(yp + lmx) = *cosp * t2 - *sinp * t1;
-            xp += lix;
-            yp += lix;
-         }
-         sinp += lf;
-         cosp += lf;
-      }
-      lf += lf;
-   }
-
-   xp = x;
-   yp = y;
-   for (li = m / 2; li--; xp += 2, yp += 2) {
-      t1 = *(xp) - *(xp + 1);
-      t2 = *(yp) - *(yp + 1);
-      *(xp) += *(xp + 1);
-      *(yp) += *(yp + 1);
-      *(xp + 1) = t1;
-      *(yp + 1) = t2;
-   }
-
-   /***************
-   * bit reversal *
-   ***************/
-   j = 0;
-   xp = x;
-   yp = y;
-   mv2 = m / 2;
-   mm1 = m - 1;
-   for (lmx = 0; lmx < mm1; lmx++) {
-      if ((li = lmx - j) < 0) {
-         t1 = *(xp);
-         t2 = *(yp);
-         *(xp) = *(xp + li);
-         *(yp) = *(yp + li);
-         *(xp + li) = t1;
-         *(yp + li) = t2;
-      }
-      li = mv2;
-      while (li <= j) {
-         j -= li;
-         li /= 2;
-      }
-      j += li;
-      xp = x + j;
-      yp = y + j;
-   }
-
-   return (0);
-}
-
-double *dgetmem(int leng)
-{
-    return ( (double *)getmem(leng, sizeof(double)) );
-}
-
-char *getmem(int leng, unsigned size)
-{
-    char *p = NULL;
-
-    if ((p = (char *)calloc(leng, size)) == NULL){
-        fprintf(stderr, "Memory allocation error !\n");
-        exit(3);
-    }
-    return (p);
-}
-
-static int checkm(const int m)
-{
-   int k;
-
-   for (k = 4; k <= m; k <<= 1) {
-      if (k == m)
-         return (0);
-   }
-   fprintf(stderr, "fft : m must be a integer of power of 2! (m=%i)\n",m);
-
-   return (-1);
-}

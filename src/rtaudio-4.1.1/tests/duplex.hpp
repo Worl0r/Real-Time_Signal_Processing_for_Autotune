@@ -55,9 +55,9 @@ typedef struct {
 
 typedef struct{
   MY_TYPE * auto_corr;
-  MY_TYPE * im_input;
   MY_TYPE * magnitudes;
   MY_TYPE * frequencies;
+  MY_TYPE * oldFrequencies;
   MY_TYPE * phase;
   MY_TYPE * oldPhase;
   MY_TYPE * autotuneSignal;
@@ -77,5 +77,6 @@ void displayRingBuffer(RingBuffer * ringBuffer);
 int getSizeRingBuffer(RingBuffer * ringBuffer);
 int readRingBuffer(RingBuffer * ringBuffer);
 void destroyRingBuffer(RingBuffer * ringBuffer);
+int fftr(double *x, double *y, const int m);
 
 #endif
