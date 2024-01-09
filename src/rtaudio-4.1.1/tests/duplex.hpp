@@ -7,35 +7,7 @@
 typedef double MY_TYPE;
 #define FORMAT RTAUDIO_FLOAT64
 
-// Some useful functions
-#define MIN(a,b) (((a)<(b))?(a):(b))
-#define MAX(a,b) (((a)>(b))?(a):(b))
-
-// Functions
-
-int fft(double *x, double *y, const int m);
-char *getmem(int leng, unsigned size);
-double *dgetmem(int leng);
-static int checkm(const int m);
-
-// Struct
-// class RingBuffer{
-//   public:
-//     RingBuffer(int size);
-//     int writeRingBuffer(int data);
-//     void displayRingBuffer();
-//     int getSizeRingBuffer();
-//     int readRingBuffer();
-//     ~RingBuffer();
-
-//   private:
-//     int sizeRingBuffer;
-//     int indexRead;
-//     int indexWrite;
-//     int * buffer;
-// };
-
-
+// Ring buffer for fundamental frequency
 typedef struct {
   int sizeRingBuffer;
   int indexRead;
@@ -43,6 +15,7 @@ typedef struct {
   int* buffer;
 } RingBuffer;
 
+// Buffer to record some transformation through the test
 typedef struct {
     MY_TYPE * bufferDump;
     int bufferFrameSize;
@@ -53,8 +26,9 @@ typedef struct {
 
 } BufferOptions;
 
+// Structure to store the autotune records
 typedef struct{
-  MY_TYPE * auto_corr;
+  MY_TYPE * autoCorr;
   MY_TYPE * magnitudes;
   MY_TYPE * frequencies;
   MY_TYPE * oldFrequencies;
@@ -63,6 +37,7 @@ typedef struct{
   MY_TYPE * autotuneSignal;
 } ProcessTools;
 
+// Parametric structure for the autotune process
 typedef struct {
   BufferOptions ** buffer;
   ProcessTools * processTools;
@@ -70,13 +45,11 @@ typedef struct {
 } Buffers;
 
 // Functions
-
 RingBuffer * createRingBuffer(int size);
 int writeRingBuffer(RingBuffer * ringBuffer, int data);
 void displayRingBuffer(RingBuffer * ringBuffer);
 int getSizeRingBuffer(RingBuffer * ringBuffer);
 int readRingBuffer(RingBuffer * ringBuffer);
 void destroyRingBuffer(RingBuffer * ringBuffer);
-int fftr(double *x, double *y, const int m);
 
 #endif

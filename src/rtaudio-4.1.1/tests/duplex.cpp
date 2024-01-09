@@ -61,20 +61,23 @@ void usage( void ) {
   exit( 0 );
 }
 
-/////////////////////////////////////////////// Options ///////////////////////////////////////////////
+/////////////////////////////////////////////// Configuration ///////////////////////////////////////////////
 
-const string PATH_RECORD = "../../../output/";
+const string PATH_RECORD = "../../../files/";
+int AUTOTUNE = false;
+int DISPLAY = false;
 unsigned int bufferFrames = 512;
 const int bufferSize = 500000;
-const int ringBufferSize = 4;
+const int ringBufferSize = 2;
 double samplingFrequency = 48000;
-int nbrHarmonics = 10;
-int nbrDemiTons = 1;
+int nbrHarmonics = bufferFrames / 2;
+int nbrDemiTons = 12;
+int nfftSize = bufferFrames;
+int jumpedIdx = 4;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /////////////////////////////////////////////// Utils ///////////////////////////////////////////////
-
 
 RingBuffer* createRingBuffer(int size) {
   RingBuffer* rb = (RingBuffer*) malloc(sizeof(RingBuffer));
@@ -129,11 +132,13 @@ int meanRingBuffer(RingBuffer* rb) {
   int coef = 0;
 
   for (int i = 0; i < rb->sizeRingBuffer; i++){
+    // We skip zero values
     if(rb->buffer[i] != 0){
       coef++;
       sum = sum + rb->buffer[i];
     }
   }
+
   rb->indexRead++;
   rb->indexRead = rb->indexRead % rb->sizeRingBuffer;
 
@@ -190,7 +195,7 @@ BufferOptions * allocateBuffer(int bufferDumpSize,
 
   BufferOptions * bufferOptions = (BufferOptions *) malloc(sizeof(BufferOptions));
   if (bufferOptions == NULL) {
-    fprintf(stderr, "Memory allocation error for BufferOptions\n");
+    fprintf(stderr, "[ERROR] Memory allocation error for BufferOptions\n");
     exit(1);
   }
 
@@ -198,7 +203,7 @@ BufferOptions * allocateBuffer(int bufferDumpSize,
 
   bufferOptions->bufferDump = (MY_TYPE*) calloc(bufferOptions->bufferDumpSize, sizeof(MY_TYPE));
   if (bufferOptions->bufferDump == NULL) {
-    fprintf(stderr, "Memory allocation error for bufferDump\n");
+    fprintf(stderr, "[ERROR] Memory allocation error for bufferDump\n");
     exit(1);
   }
 
@@ -211,7 +216,6 @@ BufferOptions * allocateBuffer(int bufferDumpSize,
 };
 
 void writeBuffer(BufferOptions *bufferIn, string PATH_RECORD){
-
   cout << "[INFO] Saving of Signals: " << (bufferIn->name).c_str() << endl;
   FILE* f;
   f = fopen(strcat((char *) PATH_RECORD.c_str(), (char *) bufferIn->name.c_str()), "wb");
@@ -222,35 +226,30 @@ void writeBuffer(BufferOptions *bufferIn, string PATH_RECORD){
   fclose(f);
 };
 
-// The goal is to extract the second maximum for the autocor function.
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////// process //////////////////////////////////////////////
+
+// This function extract the funcdamental frequency from the autocor
 int extractFundamentalFrequency(MY_TYPE * autocor, int sizeAutocor){
+
   assert(autocor);
   assert(sizeAutocor >= 5);
 
-  int * maxList = (int *) malloc(sizeof(int) * (sizeAutocor));
-  int count = 0;
+  MY_TYPE max = 0.0;
+  int idx = 0;
 
-  // TODO: adapt this hard coded variable
-  for (int i = 4; i < sizeAutocor - 1; i++){
-    if ((autocor[i-1] < autocor[i]) && (autocor[i] > autocor[i+1])){
-      maxList[count] = i,
-      count++;
+  for(int i = jumpedIdx; i < (sizeAutocor-1);i ++){
+    if(autocor[i-1] < autocor[i] && autocor[i] > autocor[i+1] && max < autocor[i]){
+      max = autocor[i];
+      idx = i;
     }
   }
 
-  int max = -1;
-
-  for(int i = 0; i< sizeAutocor; i++){
-    if (autocor[maxList[i]] > max){
-      max = maxList[i];
-    }
-  }
-
-  free(maxList);
-
-  return max;
+  return idx;
 }
 
+// Compute the autocorrelation of the input signal
 void demi_auto_corr(double * input, int size, MY_TYPE * auto_corr) {
   int n;
   int k;
@@ -263,32 +262,28 @@ void demi_auto_corr(double * input, int size, MY_TYPE * auto_corr) {
   }
 }
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////
-
-////////////////////////////////////////////// process //////////////////////////////////////////////
+// Change the fundamental frequency to the nearest frequency in nbrDemiTons
 MY_TYPE changeFundamentalFrequency(MY_TYPE fundamentalFrequency, int nbrDemiTons, int size){
-
   fundamentalFrequency = 12.0 * log2(fundamentalFrequency);
-  fundamentalFrequency = round(fundamentalFrequency - nbrDemiTons);
-  fundamentalFrequency = pow(2, fundamentalFrequency/12.0);
+
+  fundamentalFrequency = round(fundamentalFrequency);
+  fundamentalFrequency =((int) fundamentalFrequency / (int) nbrDemiTons) * nbrDemiTons;
+
+  fundamentalFrequency = pow(2, fundamentalFrequency / 12.0);
 
   return fundamentalFrequency;
 }
 
+// Compute the fundamental frequency and save it in the ring buffer
 int saveFundamentalFrequency(RingBuffer * ringBuffer, ProcessTools * processTools, double * input, int size){
 
   // Clear autocorrelation table
-  memset(processTools->auto_corr, 0, size * sizeof(MY_TYPE));
+  memset(processTools->autoCorr, 0, size * sizeof(MY_TYPE));
 
   // Compute autocorrelation
-  demi_auto_corr(input, size, processTools->auto_corr);
+  demi_auto_corr(input, size, processTools->autoCorr);
 
-  int index = extractFundamentalFrequency(processTools->auto_corr, size);
-
-  if (index == -1){
-    fprintf(stderr, "Fundamental frequency not found\n");
-    exit(1);
-  }
+  int index = extractFundamentalFrequency(processTools->autoCorr, size);
 
   // Save fundamental frequency
   writeRingBuffer(ringBuffer, index);
@@ -296,13 +291,14 @@ int saveFundamentalFrequency(RingBuffer * ringBuffer, ProcessTools * processTool
   return 1;
 }
 
-void process(double * input, RingBuffer * ringBufferFreq, ProcessTools * processTools, int size) {
+// This function apply the autotune process
+void autotuneProcess(double * input, RingBuffer * ringBufferFreq, ProcessTools * processTools, int size) {
 
   // Compute fundamental frequency
   int val = saveFundamentalFrequency(ringBufferFreq, processTools, input, size);
 
   if (val == -1){
-    fprintf(stderr, "Fundamental frequency not found\n");
+    fprintf(stderr, "[ERROR] Fundamental frequency not found\n");
     exit(1);
   }
 
@@ -312,14 +308,14 @@ void process(double * input, RingBuffer * ringBufferFreq, ProcessTools * process
   }
 
   // FFT transformation
-  int success = fftr(input, im_input, size/4);
+  int success = fftr(input, im_input, nfftSize);
 
   if(success == -1) {
-    fprintf(stderr, "FFT failed\n");
+    fprintf(stderr, "[ERROR] FFT failed\n");
     exit(1);
   }
 
-  // Compute mean of fundamental frequency
+  // Compute mean of fundamental frequency through the ring buffer
   int meanFreq = meanRingBuffer(ringBufferFreq);
 
   if(meanFreq == 0){
@@ -328,64 +324,44 @@ void process(double * input, RingBuffer * ringBufferFreq, ProcessTools * process
   }
 
   // Convert meanFreq to Hz
-  MY_TYPE meanFreqHz = (MY_TYPE) (1.0 / meanFreq) * samplingFrequency;
-
-  // Display fundamental frequency
-  displayRingBuffer(ringBufferFreq);
-  cout << "frequencies_value[0] in Hz before T" << meanFreqHz << endl;
-  cout << "frequencies_value[0] in idx before T" << meanFreq << endl;
+  MY_TYPE meanFreqHz = (MY_TYPE) (samplingFrequency / meanFreq);
 
   // Transform fundamental frequency
-  meanFreqHz = changeFundamentalFrequency(meanFreqHz, nbrDemiTons, nbrHarmonics);
+  if (AUTOTUNE){
+    meanFreqHz = changeFundamentalFrequency(meanFreqHz, nbrDemiTons, nbrHarmonics);
+  }
 
-  cout << "frequencies_value[0] in Hz after T" << meanFreqHz << endl;
-  cout << "frequencies_value[0] in idx after T" << meanFreq << endl;
+  // Adapt the fundamental frequency to the size of the buffer
+  meanFreq = (int)round(meanFreqHz * size / (samplingFrequency));
 
   // Setup fundamental frequency and magnitude
   processTools->frequencies[0] = meanFreqHz;
-  meanFreq = round((1.0 / meanFreqHz) * samplingFrequency);
   processTools->magnitudes[0] = (MY_TYPE) sqrt((input[meanFreq] * input[meanFreq]) + (im_input[meanFreq] * im_input[meanFreq]));
-  processTools->magnitudes[0] = processTools->magnitudes[0] / 2.0;
-
-  processTools->phase[0] = fmod(processTools->oldPhase[0] + 2.0 *  M_PI * processTools->frequencies[0] * ((double) size / samplingFrequency), 2.0 * M_PI);
+  processTools->magnitudes[0] = processTools->magnitudes[0] / nfftSize;
+  processTools->phase[0] = fmod(processTools->oldPhase[0] + 2.0 *  M_PI * processTools->oldFrequencies[0] * ((double) size / samplingFrequency), 2.0 * M_PI);
 
   // Idem for other harmonics
-  for (int j = 2; (j <= nbrHarmonics); j++){
-    if (j * meanFreq >= size){
-      break;
-    }
-    else{
-       processTools->frequencies[j-1] = j * meanFreqHz;
-      processTools->magnitudes[j-1] = sqrt((input[j * meanFreq] * input[j * meanFreq]) + (im_input[j * meanFreq] * im_input[j * meanFreq]));
-      processTools->magnitudes[j-1] = processTools->magnitudes[j-1] / 2.0;
-
-      processTools->phase[j-1] = fmod(processTools->oldPhase[j-1] + 2.0 *  M_PI * processTools->frequencies[j-1] * ((double) size / samplingFrequency), 2.0 * M_PI);
-    }
+  for (int j = 2; j * meanFreq < size /2; j++){
+    processTools->frequencies[j-1] = j * meanFreqHz;
+    processTools->magnitudes[j-1] = sqrt((input[j * meanFreq] * input[j * meanFreq]) + (im_input[j * meanFreq] * im_input[j * meanFreq]));
+    processTools->magnitudes[j-1] = processTools->magnitudes[j-1] / nfftSize;
+    processTools->phase[j-1] = fmod(processTools->oldPhase[j-1] + 2.0 *  M_PI * processTools->oldFrequencies[j-1] * ((double) size / samplingFrequency), 2.0 * M_PI);
   }
-
-  // Clear signal
-  for (int i = 0; i < size; i++){
-    im_input[i] = 0;
-    input[i] = 0;
-  }
-
-  // Display
-  displayTab("Magnitudes", processTools->magnitudes, nbrHarmonics);
-  displayTab("Frequencies", processTools->frequencies, nbrHarmonics);
-  displayTab("oldPhase", processTools->oldPhase, nbrHarmonics);
-  displayTab("Phase", processTools->phase, nbrHarmonics);
 
   // Update old phase and old frequencies
   memcpy(processTools->oldPhase, processTools->phase, nbrHarmonics * sizeof(MY_TYPE));
   memcpy(processTools->oldFrequencies, processTools->frequencies, nbrHarmonics * sizeof(MY_TYPE));
 
+  // Compute the transformed signal through the time
   for(int i = 0; i< size; i++){
     MY_TYPE sum = 0.0;
 
-    for(int j = 0; j < nbrHarmonics; j++){
-      sum = sum + 2.0 * processTools->magnitudes[j] * cos(2.0 * M_PI * (double) (i+1) * processTools->frequencies[j] / samplingFrequency + processTools->phase[j]);
+    // Synthesis of the signal
+    for(int j = 0; j * meanFreq < size / 2; j++){
+      sum = sum + 2.0 * processTools->magnitudes[j] * cos(2.0 * M_PI * (double) (i+1) * (meanFreqHz * (j+1) / samplingFrequency) + processTools->phase[j]);
     }
 
+    // Thresholding
     if(sum > 1){
       processTools->autotuneSignal[i] = 1;
     }
@@ -397,8 +373,18 @@ void process(double * input, RingBuffer * ringBufferFreq, ProcessTools * process
     }
   }
 
-  //displayTab("SignalTab", (processTools->autotuneSignal), size);
+  // Display
+  displayRingBuffer(ringBufferFreq);
 
+  if (DISPLAY){
+    cout << "[DEBUG] frequencies_value[0] in Hz after transformation: " << meanFreqHz << endl;
+    cout << "[DEBUG] frequencies_value[0] in idx after transformation: " << meanFreq << endl;
+    displayTab("Magnitudes", processTools->magnitudes, nbrHarmonics);
+    displayTab("Frequencies", processTools->frequencies, nbrHarmonics);
+    // displayTab("oldPhase", processTools->oldPhase, nbrHarmonics);
+    // displayTab("Phase", processTools->phase, nbrHarmonics);
+    //displayTab("SignalTab", (processTools->autotuneSignal), size);
+  }
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -409,7 +395,7 @@ int inout( void *outputBuffer, void *inputBuffer, unsigned int /*nBufferFrames*/
   // a simple buffer copy operation here.
   if ( status ) std::cout << "Stream over/underflow detected." << std::endl;
 
-  // Variables
+  // Variable extraction
   Buffers * listBuffers = (Buffers *) data;
 
   BufferOptions * bufferStructIn = listBuffers->buffer[0];
@@ -421,7 +407,7 @@ int inout( void *outputBuffer, void *inputBuffer, unsigned int /*nBufferFrames*/
 
   ProcessTools * processTools = listBuffers->processTools;
 
-  // Record input buffer
+  // Record input buffer for figures
   int index = write_buff_dump(
     (double *) inputBuffer,
     bufferStructIn->bufferFrameSize,
@@ -430,15 +416,16 @@ int inout( void *outputBuffer, void *inputBuffer, unsigned int /*nBufferFrames*/
     &bufferStructIn->indexBufferDump
   );
 
-  /////////////////// Process ////////////////////////
+  /////////////////// Autotune Process //////////////////////
 
-  process((double *) inputBuffer, ringBufferFreq, processTools, (int) bufferStructIn->bufferFrameSize);
+  autotuneProcess((double *) inputBuffer, ringBufferFreq, processTools, (int) bufferStructIn->bufferFrameSize);
 
-  ////////////////////////////////////////////////////
+  ///////////////////////////////////////////////////////////
 
+  // Copy input buffer to output buffer to hear the effects of the processing in realtime
   memcpy(outputBuffer, (void *) processTools->autotuneSignal, (size_t) (bufferStructIn->bytes));
 
-  // Record output buffer
+  // Record output buffer for figures
   int index2 = write_buff_dump(
     (double *) (processTools->autotuneSignal),
     bufferStructIn->bufferFrameSize,
@@ -499,9 +486,11 @@ int main( int argc, char *argv[] )
 
   /////////////////////////////////////////////// Buffers ////////////////////////////////////////////
 
+  cout << "[INFO] Dynamic memory is being allocated..." << endl;
+
   // Initialization of buffer_dump
   Buffers * listBuffers = (Buffers *) malloc(sizeof(Buffers));
-  listBuffers->buffer = (BufferOptions **) malloc(sizeof(BufferOptions) * 4);
+  listBuffers->buffer = (BufferOptions **) calloc(4, sizeof(BufferOptions*));
 
   listBuffers->buffer[0] = allocateBuffer(bufferSize, bufferFrames,  bufferBytes, "SignalIn");
   listBuffers->buffer[1] = allocateBuffer(bufferSize, bufferFrames , bufferBytes, "SignalOut");
@@ -511,7 +500,7 @@ int main( int argc, char *argv[] )
   // Process tools
   ProcessTools * processTools = (ProcessTools *) malloc(sizeof(ProcessTools));
 
-  processTools->auto_corr = (MY_TYPE *) calloc(bufferFrames, sizeof(MY_TYPE));
+  processTools->autoCorr = (MY_TYPE *) calloc(bufferFrames, sizeof(MY_TYPE));
   processTools->frequencies = (MY_TYPE *) calloc(nbrHarmonics, sizeof(MY_TYPE));
   processTools->oldFrequencies = (MY_TYPE *) calloc(nbrHarmonics, sizeof(MY_TYPE));
   processTools->magnitudes = (MY_TYPE *) calloc(nbrHarmonics, sizeof(MY_TYPE));
@@ -521,7 +510,7 @@ int main( int argc, char *argv[] )
 
   listBuffers->processTools = processTools;
 
-  // Ring Buffer for the autocor function
+  // Ring Buffer for the fundamental frequency
   listBuffers->ringBufferFreq = createRingBuffer(ringBufferSize);
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -559,7 +548,7 @@ int main( int argc, char *argv[] )
 
   /////////////////////////////////////////////// End ///////////////////////////////////////////////
 
-  cout << "[INFO] Writting of records" << endl;
+  cout << "[INFO] Writting of records..." << endl;
 
   writeBuffer(listBuffers->buffer[0], PATH_RECORD);
   writeBuffer(listBuffers->buffer[1], PATH_RECORD);
@@ -567,12 +556,13 @@ int main( int argc, char *argv[] )
   writeBuffer(listBuffers->buffer[3], PATH_RECORD);
 
   // Cleaning of dynamic allocations
+  cout << "[INFO] Cleaning of the dynamic memory..." << endl;
   deallocateBuffer(listBuffers->buffer[0]);
   deallocateBuffer(listBuffers->buffer[1]);
   deallocateBuffer(listBuffers->buffer[2]);
   deallocateBuffer(listBuffers->buffer[3]);
 
-  free(processTools->auto_corr);
+  free(processTools->autoCorr);
   free(processTools->autotuneSignal);
   free(processTools->frequencies);
   free(processTools->oldFrequencies);
@@ -583,6 +573,7 @@ int main( int argc, char *argv[] )
 
   destroyRingBuffer(listBuffers->ringBufferFreq);
 
+  free(listBuffers->buffer);
   free(listBuffers);
 
   cout << "[INFO] End" << endl;

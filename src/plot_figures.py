@@ -5,7 +5,7 @@ import os
 import math
 
 # --> Adapt the file name (and path) <--
-filename = "./SICOM_BE_Signal_Temps_Reel/autotune_project/output/"
+filename = "./SICOM_BE_Signal_Temps_Reel/autotune_project/files/"
 
 def plotSignal(name, frequence, color):
     # Read binary file (double format).
@@ -31,7 +31,9 @@ def plotSignal(name, frequence, color):
 def main():
     plotSignal("SignalIn", 48000, 'b')
     plotSignal("SignalOut", 48000, 'r')
-    #plotSignal("FundamentalFrequency", 48000, 'r')
+    plotSignal("Autocor", 48000, 'r')
+    plotSignal("FundamentalFrequency", 48000, 'r')
+
 
     print("[END] Finished")
 
