@@ -64,11 +64,11 @@ void usage( void ) {
 /////////////////////////////////////////////// Configuration ///////////////////////////////////////////////
 
 const string PATH_RECORD = "../../../files/";
-int AUTOTUNE = false;
-int DISPLAY = false;
+int AUTOTUNE = true;
+int DISPLAY = true;
 unsigned int bufferFrames = 512;
-const int bufferSize = 500000;
-const int ringBufferSize = 2;
+const int bufferSize = 500000 / 2;
+const int ringBufferSize = 5;
 double samplingFrequency = 48000;
 int nbrHarmonics = bufferFrames / 2;
 int nbrDemiTons = 12;
@@ -275,7 +275,7 @@ MY_TYPE changeFundamentalFrequency(MY_TYPE fundamentalFrequency, int nbrDemiTons
 }
 
 // Compute the fundamental frequency and save it in the ring buffer
-int saveFundamentalFrequency(RingBuffer * ringBuffer, ProcessTools * processTools, double * input, int size){
+int saveFundamentalFrequency(RingBuffer * ringBuffer, ProcessTools * processTools, double * input, BufferOptions * fundamentalFrequency, int size){
 
   // Clear autocorrelation table
   memset(processTools->autoCorr, 0, size * sizeof(MY_TYPE));
@@ -288,14 +288,30 @@ int saveFundamentalFrequency(RingBuffer * ringBuffer, ProcessTools * processTool
   // Save fundamental frequency
   writeRingBuffer(ringBuffer, index);
 
+  // Save fundamental frequency in Hz for the future figure
+  MY_TYPE meanFreqHz = (MY_TYPE) (samplingFrequency / index);
+  MY_TYPE tabMeanFreqHz[size];
+  for(int i = 0; i < size; i++){
+    tabMeanFreqHz[i] = meanFreqHz;
+  }
+
+  // Write fundamental frequency in Hz in the buffer dump
+  write_buff_dump(
+    (double *) tabMeanFreqHz,
+    fundamentalFrequency->bufferFrameSize,
+    (MY_TYPE *) fundamentalFrequency->bufferDump,
+    fundamentalFrequency->bufferDumpSize,
+    &fundamentalFrequency->indexBufferDump
+  );
+
   return 1;
 }
 
 // This function apply the autotune process
-void autotuneProcess(double * input, RingBuffer * ringBufferFreq, ProcessTools * processTools, int size) {
+void autotuneProcess(double * input, RingBuffer * ringBufferFreq, ProcessTools * processTools, BufferOptions * fundamentalFrequency, int size) {
 
   // Compute fundamental frequency
-  int val = saveFundamentalFrequency(ringBufferFreq, processTools, input, size);
+  int val = saveFundamentalFrequency(ringBufferFreq, processTools, input, fundamentalFrequency, size);
 
   if (val == -1){
     fprintf(stderr, "[ERROR] Fundamental frequency not found\n");
@@ -418,7 +434,7 @@ int inout( void *outputBuffer, void *inputBuffer, unsigned int /*nBufferFrames*/
 
   /////////////////// Autotune Process //////////////////////
 
-  autotuneProcess((double *) inputBuffer, ringBufferFreq, processTools, (int) bufferStructIn->bufferFrameSize);
+  autotuneProcess((double *) inputBuffer, ringBufferFreq, processTools, fundamentalFrequency, (int) bufferStructIn->bufferFrameSize);
 
   ///////////////////////////////////////////////////////////
 
