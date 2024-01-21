@@ -15,7 +15,8 @@ def plotSignal(name, frequence, color, ratio=1, offset=0):
 
     # Write signal as a .wav file (useless if signal is not audio).
     # The sampling rate is hard coded here, --> change it if necessary <--
-    write(os.path.join(filename, name) + '.wav', frequence, y)
+    if name != "FundamentalFrequency":
+        write(os.path.join(filename, name) + '.wav', frequence, y)
 
     # Plot the signal.
     time = np.arange(y.shape[0]) / frequence  # Create a time array
@@ -32,6 +33,7 @@ def plotSignal(name, frequence, color, ratio=1, offset=0):
         plt.ylabel('Frequencies')
     plt.title('Evolution of ' + name + ' Over Time')
     plt.grid()
+
     plt.savefig(os.path.join(filename, name))
 
 def plotCompareSignal(name1, name2, frequence, color1, color2, ratio=1, offset=0):
@@ -80,14 +82,13 @@ def computeFundamentalFrequency2(name, frequence):
 def main():
     plotSignal("SignalIn", sampling_rate, 'b')
     plotSignal("SignalOut",sampling_rate, 'r')
-    plotSignal("Autocor", sampling_rate, 'r')
     plotSignal("FundamentalFrequency", sampling_rate, 'r', 0.8, 0.1)
 
     f = computeFundamentalFrequency2("SignalOut", sampling_rate)
     print("Fundamental Frequency: " + str(f))
 
     plotCompareSignal("SignalIn", "SignalOut", sampling_rate, 'b', 'r')
-    plotCompareSignal("SignalIn", "FundamentalFrequency", sampling_rate, 'b', 'r', 0.2, 0.1)
+    plotCompareSignal("SignalIn", "FundamentalFrequency", sampling_rate, 'b', 'r')
 
 
     print("[END] Finished")

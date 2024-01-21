@@ -64,12 +64,12 @@ void usage( void ) {
 /////////////////////////////////////////////// Configuration ///////////////////////////////////////////////
 
 const string PATH_RECORD = "../../../files/";
-int AUTOTUNE = false;
+int AUTOTUNE = true;
 int DISPLAY = true;
 int ACTIVATE_PHASE = true;
 unsigned int bufferFrames = 512;
-const int bufferSize = 500000 / 5;
-const int ringBufferSize = 2;
+const int bufferSize = 500000 / 2;
+const int ringBufferSize = 20;
 double samplingFrequency = 48000;
 int nbrHarmonics = bufferFrames / 2;
 int nbrDemiTons = 12;
