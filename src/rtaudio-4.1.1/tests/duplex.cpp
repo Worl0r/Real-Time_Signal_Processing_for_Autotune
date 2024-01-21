@@ -64,11 +64,12 @@ void usage( void ) {
 /////////////////////////////////////////////// Configuration ///////////////////////////////////////////////
 
 const string PATH_RECORD = "../../../files/";
-int AUTOTUNE = true;
+int AUTOTUNE = false;
 int DISPLAY = true;
+int ACTIVATE_PHASE = true;
 unsigned int bufferFrames = 512;
-const int bufferSize = 500000 / 2;
-const int ringBufferSize = 5;
+const int bufferSize = 500000 / 5;
+const int ringBufferSize = 2;
 double samplingFrequency = 48000;
 int nbrHarmonics = bufferFrames / 2;
 int nbrDemiTons = 12;
@@ -79,6 +80,7 @@ int jumpedIdx = 4;
 
 /////////////////////////////////////////////// Utils ///////////////////////////////////////////////
 
+// Create a ring buffer
 RingBuffer* createRingBuffer(int size) {
   RingBuffer* rb = (RingBuffer*) malloc(sizeof(RingBuffer));
   rb->sizeRingBuffer = size;
@@ -88,11 +90,13 @@ RingBuffer* createRingBuffer(int size) {
   return rb;
 }
 
+// Destroy a ring buffer
 void destroyRingBuffer(RingBuffer* rb) {
   free(rb->buffer);
   free(rb);
 }
 
+// Write data in the ring buffer
 int writeRingBuffer(RingBuffer* rb, int data) {
   if (rb->indexRead == -1){
     rb->indexRead = 0;
@@ -105,6 +109,7 @@ int writeRingBuffer(RingBuffer* rb, int data) {
   return 0;
 }
 
+// Read data in the ring buffer and increment the indexRead
 int readRingBuffer(RingBuffer* rb) {
   if (rb->indexRead == -1){
     printf("[ERROR] Buffer is empty in readRingBuffer\n");
@@ -122,6 +127,7 @@ int readRingBuffer(RingBuffer* rb) {
   return data;
 }
 
+// Compute the mean of the ring buffer and increment the indexRead
 int meanRingBuffer(RingBuffer* rb) {
   if (rb->indexRead == -1){
     printf("[ERROR] Buffer is empty in readRingBuffer\n");
@@ -145,10 +151,12 @@ int meanRingBuffer(RingBuffer* rb) {
   return sum / coef;
 }
 
+// Return the size of the ring buffer
 int getSizeRingBuffer(RingBuffer* rb) {
   return rb->sizeRingBuffer;
 }
 
+// Display the ring buffer
 void displayRingBuffer(RingBuffer* rb) {
   if (rb->indexRead == -1){
     printf("[ERROR] Buffer is empty in displayRingBuffer\n");
@@ -173,6 +181,7 @@ void displayRingBuffer(RingBuffer* rb) {
   printf("Write index is : %d\n", rb->indexWrite);
 }
 
+// Write data in the buffer dump
 void displayTab(string testName, MY_TYPE * buffer, int size){
   cout << "[LOG] [TEST] " << testName << endl << "[";
 
@@ -182,11 +191,13 @@ void displayTab(string testName, MY_TYPE * buffer, int size){
   cout << " ]" << endl;
 }
 
+// free the buffer
 void deallocateBuffer(BufferOptions * bufferOptions){
   free(bufferOptions->bufferDump);
   free(bufferOptions);
 };
 
+// Allocate the buffer
 BufferOptions * allocateBuffer(int bufferDumpSize,
   int bufferFrameSize,
   unsigned int bufferBytes,
@@ -214,6 +225,8 @@ BufferOptions * allocateBuffer(int bufferDumpSize,
 
   return bufferOptions;
 };
+
+// Save buffer data in a binary file
 
 void writeBuffer(BufferOptions *bufferIn, string PATH_RECORD){
   cout << "[INFO] Saving of Signals: " << (bufferIn->name).c_str() << endl;
@@ -373,9 +386,17 @@ void autotuneProcess(double * input, RingBuffer * ringBufferFreq, ProcessTools *
     MY_TYPE sum = 0.0;
 
     // Synthesis of the signal
-    for(int j = 0; j * meanFreq < size / 2; j++){
-      sum = sum + 2.0 * processTools->magnitudes[j] * cos(2.0 * M_PI * (double) (i+1) * (meanFreqHz * (j+1) / samplingFrequency) + processTools->phase[j]);
+    if (ACTIVATE_PHASE){
+      for(int j = 0; j * meanFreq < size / 2; j++){
+        sum = sum + 2.0 * processTools->magnitudes[j] * cos(2.0 * M_PI * (double) (i+1) * (meanFreqHz * (j+1) / samplingFrequency) + processTools->phase[j]);
+      }
     }
+    else{
+      for(int j = 0; j * meanFreq < size / 2; j++){
+        sum = sum + 2.0 * processTools->magnitudes[j] * cos(2.0 * M_PI * (double) (i+1) * (meanFreqHz * (j+1) / samplingFrequency));
+      }
+    }
+
 
     // Thresholding
     if(sum > 1){
