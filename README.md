@@ -15,7 +15,7 @@
 
 ## Presentation
 
-In this project, we implemented a real-time C/C++ version of autotune from the source code **duplex.cpp** source code. We used the **rtaudio** library to facilitate the real-time processing.
+In this project, we implemented a real-time C/C++ version of autotune in the **duplex.cpp** file. We used the **rtaudio-4.1.1** library to facilitate the real-time processing. You can find more informations about the project in the [**report**]().
 
 ## Architecture
 
@@ -47,18 +47,19 @@ functions for easier implementation.
 
 You can find a configuration part in the **duplex.cpp** file.
 
-| Variable        | Comment |
-| ------|-----|
-| PATH_RECORD     	| Figures directory	|
-| AUTOTUNE    	| True to activate the autotune processing	|
-| DISPLAY    	| True to display logs for debuging	|
-| bufferFrames    	| Buffer size for real-time processing	|
-| bufferSize    	| Buffer size to record all the voice test	|
-| ringBufferSize    	| Buffer size for averaging the fundamental frequency over several frame	|
-| samplingFrequency    	| The number of sample during one seconde of record	|
-| nbrDemiTons    	| The number of the number of demi tones we round off |
-| nfftSize    	| Length of the fft |
-| jumpedIdx   	| Number of indix to jump to avoid interferance during the research of the fundamental frequency  |
+| Variable        | Comment | Value |
+| ------|-----|---------|
+| PATH_RECORD     	| Figures directory	|"../../../files/"|
+| AUTOTUNE    	| True to activate the autotune processing	|true|
+| DISPLAY    	| True to display logs for debuging	|true|
+| ACTIVATE_PHASE    	| True to add the phase in the synthesis processs|true|
+| bufferFrames    	| Buffer size for real-time processing	|512|
+| bufferSize    	| Buffer size to record all the voice test	|250000 (about 2.5s)|
+| ringBufferSize    	| Buffer size for averaging the fundamental frequency over several frames	|5|
+| samplingFrequency    	| The number of sample during one seconde of record	|48000|
+| nbrDemiTons    	| The number of the number of demi tones we round off |12|
+| nfftSize    	| Length of the fft |512|
+| jumpedIdx   	| Number of indix to jump to avoid interferance during the research of the fundamental frequency  |4|
 
 
 ## How to use
@@ -104,6 +105,12 @@ make all
 
 [argument_2]: Sampling frequency. We worked with 48000.
 
+If you do not know about arguments, you can first learn more about your system with the **audioprobe.cpp** file. Execute first this command line and learn about what you need:
+
+```bash
+make all
+./audioprobe
+```
 
 5. Finally you can visualize your records with the **plot_figures.py** file. We assume you have already a python environement or something similar.
 
@@ -132,7 +139,40 @@ duplex.cpp RtAudio.cpp -lole32 -lwinmm -lksuser -lmfplat -lmfuuid
 
 ## Results
 
-...
+You can see and hear our last records in the *files* folder. You can also find more in the report. Finally, this is some figures that we ploted.
+
+### Autotune synthesis for one sentence
+<p align="center">
+	<img style="border-radius:25px" src="./assets/SignalInSignalOut.png" width="1200">
+</p>
+<p>&nbsp;</p>
+
+### SignalIn is a pure tone whose fundamental frequency varies linearly with time. We can see that thanks to our ring buffer (size 5) we can correctly track the fundamental frequency over time.
+<p align="center">
+	<img style="border-radius:25px" src="./assets/SignalInFundamentalFrequency_buffer_2 (1).png" width="1200">
+</p>
+<p>&nbsp;</p>
+
+### In this section, we zoom in on the signal and can see the influence of the phase calculated with equation (2). On the left, there is no phase in the synthesis process and you can see a discontinuity at t=0.405s. On the right, there is phase and all is well.
+
+(1) is the formula for the synthesis process after we apply the autotune process.
+
+(2) is the formula where we recalculate the phase of buffer i+1 with the fundamental frequency of buffer i and we have also : $$\Delta t = current\_index / F_s$$ with Fs the sampling frequency.
+
+$$
+\begin{equation} x(t) = \sum_{n=0}^{\infty} 2A_n \cos(2\pi n f_0 t + \phi_n) \end{equation}
+$$
+
+$$
+\begin{equation} \hspace{1cm} \phi^{(i+1)}_n = \phi^{(i)}_n + 2\pi n f^{(i)}_0\Delta t \end{equation}
+$$
+
+<p>&nbsp;</p>
+<p display="flex" align="center">
+	<img style="border-radius:25px" src="./assets/SignalInSignalOut_zoomed_phase.png" width="600">
+    <img style="border-radius:25px" src="./assets/SignalInSignalOut_zoomed_with_pahse.png" width="600">
+</p>
+<p>&nbsp;</p>
 
 ## References
 
