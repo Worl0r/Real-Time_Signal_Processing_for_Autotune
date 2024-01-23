@@ -184,8 +184,6 @@ $$
 
 [4] [*Auto-tune Presentation*](https://en.wikipedia.org/wiki/Auto-Tune)
 
-[5] [*GitHub Repository*](https://github.com/Worl0r/Real-Time_Signal_Processing_for_Autotune)
-
 ## Authors
 - [Brice Convers](https://briceconvers.com)
 - [Simon Laurent]()
