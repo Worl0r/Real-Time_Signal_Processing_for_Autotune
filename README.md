@@ -15,7 +15,7 @@
 
 ## Presentation
 
-In this project, we implemented a real-time C/C++ version of autotune in the **duplex.cpp** file. We used the **rtaudio-4.1.1** library to facilitate the real-time processing. You can find more informations about the project in the [**report**]().
+In this project, we implemented a real-time C/C++ version of autotune in the **duplex.cpp** file. We used the **rtaudio-4.1.1** library to facilitate the real-time processing. You can find more informations about the project in the [**report**](./brice_convers_simon_laurent_tstr_autotune_2023.pdf).
 
 ## Architecture
 
